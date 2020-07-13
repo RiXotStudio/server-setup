@@ -5,7 +5,7 @@
 
 ###! Script to set up tor relay on target system
 ###! Requires:
-###! - Anything to run posix shell scripts i.e busybox
+###! - Anything to run posix shell scripts e.g busybox
 ###! - Command 'lsb_release' to identify distribution on linux
 ###! - Command 'uname' to identify used kernel
 ###! Exit codes:
@@ -33,6 +33,17 @@ MAINTAINER_EMAIL="kreyren@rixotstudio.cz"
 MAINTAINER_NICKNAME="kreyren"
 MAINTAINER_NAME="Jacob"
 MAINTAINER_SURNAME="Hrbek"
+
+# NOTICE(Krey): By default busybox outputs a full path in '$0' this is used to strip it
+myName="${0##*/}"
+
+# Used to prefix logs with timestemps, uses ISO 8601 by default
+logPrefix="[ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ] "
+# Path to which we will save logs
+# NOTICE(Krey): To avoid storing file '$HOME/.some-name.sh.log' we are stripping the '.sh' here
+logPath="${XDG_DATA_HOME:-$HOME/.local/share}/${myName%%.sh}.log"
+
+# FIXME: _=${var:="some text"} is less verbose and less error prone than [ -z "$var" ] && var="some text"
 
 # Command overrides
 [ -z "$PRINTF" ] && PRINTF="printf"
@@ -85,14 +96,7 @@ MAINTAINER_SURNAME="Hrbek"
 # Exit on anything unexpected
 set -e
 
-# NOTICE(Krey): By default busybox outputs a full path in '$0' this is used to strip it
-myName="${0##*/}"
-
-# Used to prefix logs with timestemps, uses ISO 8601 by default
-logPrefix="[ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ] "
-# Path to which we will save logs
-# NOTICE(Krey): To avoid storing file '$HOME/.some-name.sh.log' we are stripping the '.sh' here
-logPath="${XDG_DATA_HOME:-$HOME/.local/share}/${myName%%.sh}.log"
+# FIXME: Implement sanitization for used shell
 
 # inicialize the script in logs
 "$PRINTF" '%s\n' "Started $myName on $("$UNAME" -s) at $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$logPath"
@@ -163,7 +167,7 @@ einfo() { funcname="einfo"
 		unset funcname
 		return 0
 	else
-		die 255 "processing variable DEBUG with value '$DEBUG' in $funcname"
+		die unexpected "processing variable DEBUG with value '$DEBUG' in $funcname"
 	fi
 }; alias einfo='einfo "$LINENO"'
 
@@ -179,7 +183,7 @@ ewarn() { funcname="ewarn"
 		unset funcname
 		return 0
 	else
-		die 255 "processing variable DEBUG with value '$DEBUG' in $funcname"
+		die unexpected "processing variable DEBUG with value '$DEBUG' in $funcname"
 	fi
 }; alias ewarn='ewarn "$LINENO"'
 
@@ -195,7 +199,7 @@ eerror() { funcname="eerror"
 		unset funcname
 		return 0
 	else
-		die 255 "processing variable DEBUG with value '$DEBUG' in $funcname"
+		die unexpected "processing variable DEBUG with value '$DEBUG' in $funcname"
 	fi
 }; alias eerror='eerror "$LINENO"'
 
@@ -211,7 +215,7 @@ edebug() { funcname="edebug"
 		unset funcname
 		return 0
 	else
-		die 255 "processing variable DEBUG with value '$DEBUG' in $funcname"
+		die unexpected "processing variable DEBUG with value '$DEBUG' in $funcname"
 	fi
 }; alias eerror='eerror "$LINENO"'
 
@@ -230,10 +234,10 @@ efixme() { funcname="efixme"
 			unset funcname
 			return 0
 		else
-			die 255 "processing DEBUG variable with value '$DEBUG' in $funcname"
+			die unexpected "processing DEBUG variable with value '$DEBUG' in $funcname"
 		fi
 	else
-		die 255 "processing variable IGNORE_FIXME with value '$IGNORE_FIXME' in $0"
+		die unexpected "processing variable IGNORE_FIXME with value '$IGNORE_FIXME' in $0"
 	fi
 }; alias efixme='efixme "$LINENO"'
 
@@ -256,7 +260,7 @@ if command -v "$UNAME" 1>/dev/null; then
 			elif ! command -v "$LSB_RELEASE" 1>/dev/null && [ ! -f /etc/os-release ]; then
 				die false "Unable to identify linux distribution using  command 'lsb_release' nor file '/etc/os-release'"
 			else
-				die 255 "attempting to assume linux distro and release"
+				die unexpected "attempting to assume linux distro and release"
 			fi
 
 			edebug "Identified distribution as '$assumedDistro'"
@@ -278,12 +282,12 @@ if command -v "$UNAME" 1>/dev/null; then
 		FreeBSD | Redox | Darwin | Windows)
 			KERNEL="$unameKernel"
 		;;
-		*) die 255 "Unexpected kernel '$unameKernel'"
+		*) die unexpected "Unexpected kernel '$unameKernel'"
 	esac
 elif ! command -v "$UNAME" 1>/dev/null; then
 	die false "Standard command '$UNAME' is not available on this system, unable to identify kernel"
 else
-	die 255 "identifying system"
+	die unexpected "identifying system"
 fi
 
 # Identify privileges of the end-user
@@ -295,7 +299,7 @@ if command -v "$ID" 1>/dev/null; then
 		edebug "According to command 'id' user's ID is not 0 (user id is "$ID" -u), assuming non-root"
 		privileged="false"
 	else
-		die 255 "Command '${ID:-id}' returned unexpected value '$($ID -u)'"
+		die unexpected "Command '${ID:-id}' returned unexpected value '$($ID -u)'"
 	fi
 elif ! command -v "$ID" 1>/dev/null; then
 	die fixme "Unable to deduce wether this script has been executed with privileged permission, implement other methods in case command 'id' is not executable on this environment"
@@ -303,25 +307,113 @@ else
 	die bug "Logic failure happend while identifying privileged user"
 fi
 
+[ -z "$INVOKE_PRIVILEGED_FORMAT_STRING_QUESTION" ] && INVOKE_PRIVILEGED_FORMAT_STRING_QUESTION="### PRIVILEGED ACCESS REQUEST ###\n\n\s\n"
+
 # Root elevation on-demand
-rootme() {
+# SYNOPSIS: rootme [reason for privileged access] [command]
+invoke_privileged() { funcname="invoke_privileged"
+
+	die fixme "Implement $funcname to execute '$2'"
+
 	if [ "$privileged" = "false" ]; then
 		edebug "Script '$myName' has been executed from an unprivileged user, deducing possible elevation"
-		if command -v "$SUDO"; then
-			printf '%s\n' \
-				"### PRIVILEGED ACCESS REQUEST ###" \
-				"" \
-				"This script requires privileged permission for $2 for which we are executing:" \
-				"" \
-				"    $1"
-				"Requesting permission to use '${SUDO:-sudo}' (y/n)"
-			read -r privilege_granted
 
-			KREY_CONTINUE_HERE
+		# Ask for permission to execute the command
+		printf "$INVOKE_PRIVILEGED_FORMAT_STRING_QUESTION" "$1"
 
-			sudo "$1" || die 3 "Unable to elevate privileged permission using '${SUDO:-sudo}'"
+		while true; do
+			read -p "Requesting permission to invoke '$2' as privileged user (y/n)" privilege_granted
+
+			case "$privilege_granted" in
+				"Y"|"y"|"YES"|"yes")
+					edebug "User granted permission to invoke '$2' as privileged user"
+					unset privilege_granted
+					break
+				;;
+				"N"|"n"|"NO"|"no")
+					die 3 "Unable to execute '$2' as privileged user"
+				;;
+				*) printf '%s\n' "Input '$privilege_granted' is not recognized, try again.."
+			esac
+		done
+
+		# Check what we can use for executing command as privileged user
+		unset privilege_commands
+
+		## Check for sudo
+		if command -v "$SUDO" 1>/dev/null; then
+			privilege_commands="$privilege_commands sudo"
+		elif ! command -v "$SUDO" 1>/dev/null; then
+			edebug "Command '$SUDO' is not executable in $funcname, unable to use it"
+		else
+			die bug "checking wether command sudo is executable in $funcname"
 		fi
+
+		## Check for su
+		if command -v "$SU" 1>/dev/null; then
+			privilege_commands="$privilege_commands su"
+		elif ! command -v "$SU" 1>/dev/null; then
+			edebug "Command '$SU' is not executable in $funcname, unable to use it"
+		else
+			die bug "checking wether command su is executable in $funcname"
+		fi
+
+		case "$(printf '%s\n' "$privilege_commands" | tr ' ' '\n' | wc -l)" in
+			0) die 3 "Neither of supported commands used to invoke command as privileged user '$privilege_commands' are available on this system, unable to invoke '$2'" ;;
+			1) 
+				case "$(printf '%s\n' "$privilege_commands" | sed "s/ //gm")" in
+					"sudo")
+						while true; do
+							read -p "Requesting permission to use '${SUDO:-sudo}' for invokation of '$2' (y/n)" allowed_to_use_sudo
+
+							case "$allowed_to_use_sudo" in
+								"Y"|"y"|"YES"|"yes")
+									sudo "$2" | die 3 "Unable to execute '$2' with privileged permission"
+									break
+								;;
+								"N"|"n"|"NO"|"no")
+									die 3 "Unable to execute '$2' with privileged permission using sudo, because we were not allowed to proceed"
+								;;
+								*)
+									printf '%s\n' "Input '$allowed_to_use_sudo' is not recognized, retrying.."
+									unset allowed_to_use_sudo
+							esac
+						done
+					;;
+					"su")
+						while true; do
+							read -p "Requesting permission to use '${SUDO:-sudo}' for invokation of '$2' (y/n)" allowed_to_use_sudo
+
+							case "$allowed_to_use_sudo" in
+								"Y"|"y"|"YES"|"yes")
+									su root -c "$2" | die 3 "Unable to execute '$2' with privileged permission"
+									break
+								;;
+								"N"|"n"|"NO"|"no")
+									die 3 "Unable to execute '$2' with privileged permission using sudo, because we were not allowed to proceed"
+								;;
+								*)
+									printf '%s\n' "Input '$allowed_to_use_sudo' is not recognized, retrying.."
+									unset allowed_to_use_sudo
+							esac
+						done
+					;;
+				esac
+			2)
+				# DNM: Implement proper logic
+				efixme "Implement better logic here, invoking 'sudo' for testing.."
+
+				sudo "$2" || die 3 "unable to use privileged permission"
+			;;
+			*)
+				# FIXME-QA: Implement better output
+				die bug "Unexpected value has been returned for variable 'privilege_commands'"
+		esac
+
 	elif [ "$privileged" = "true" ]; then
+		edebug "Executing '$1' as privileged user"
+		return 0
+
 	fi
 }
 
@@ -345,14 +437,14 @@ while [ "$#" -gt 0 ]; do case "$1" in
 								elif ! "$APT" list --installed tor |& "$GREP" -o "^tor/.*"; then
 									edebug "Concluded that package 'tor' is not installed, resolving.."
 									elog "Installing package '$TOR' using '$APT_GET':"
-									"$APT_GET" install --yes tor >> "$logPath" || die false "Unable to install package 'tor' on $DISTRO/$RELEASE environment"
+									invoke_privileged "\"$APT_GET\" install --yes tor >> "$logPath" || die false \"Unable to install package 'tor' on $DISTRO/$RELEASE environment\"" "installing tor"
 								else
-									die bug "insufficient logic found while trying to check wether tor package is installed"
+									die bug "insufficient logic found while trying to check wether package 'tor' is installed"
 								fi
 							elif ! command -v "$APT" 1>/dev/null; then
 								die false "Command '$APT' is not executable from this $DISTRO environment"
 							else
-								die 255 "processing apt availability on $KERNEL/$RELEASE"
+								die unexpected "processing apt availability on $KERNEL/$RELEASE"
 							fi
 						fi
 						die fixme "run tor in background"
