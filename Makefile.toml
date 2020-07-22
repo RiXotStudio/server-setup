@@ -3,7 +3,7 @@ script_runner = "@rust"
 script = [
 '''
 fn main() {
-	println!("{}", "This is a posix sh script, what are you expecting cargo to do with it?");
+	println!("{}", "FIXME: Logic for Cargo-make needed");
 }
 '''
 ]
