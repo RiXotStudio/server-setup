@@ -42,10 +42,7 @@ build: vendor
 	$(info Building..)
 	@ [ -d build ] || mkdir build
 	@ [ -f build/server-setup.sh ] || cp src/bin/server-setup.sh build/server-setup.sh
-	@ for vendorFunc in $$(cat src/bin/server-setup.sh | grep "^#% APPEND .*" | sed "s/#% APPEND //gm" | tr '\n' ' '); do \
-		cp vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/$$vendorFunc.sh vendor/$$vendorFunc.sh && \
-		printf "g/^#.*/d\nw\nq\n" | ed -s vendor/$$vendorFunc.sh && \
-		printf "/^#%% APPEND $$vendorFunc/d\\n-1r vendor/$$vendorFunc.sh\\nw\\nq\\n" | ed -s build/server-setup.sh; done
+	@ grep "^#% APPEND.*" src/bin/server-setup.sh | while IFS= read -r string; do cp "${string##\#& APPEND}" "vendor/${string##*/}" && printf "g/^#.*/d\nw\nq\n" | ed -s "vendor/${string##*/}" && printf "/^#& APPEND ${string##\#& APPEND}/d\\n-1r ${string##\#& APPEND}\\nw\\nq\\n" | ed -s build/server-setup.sh; done # Replace '#& APPEND' flags with their specified path
 	@ printf '/^#%% BUILD-CHECK/d\nd\nw\nq\n' | ed -s build/server-setup.sh # Remove the BUILD-CHECK
 	@ printf 'g/###!.*/d\nw\nq\n' | ed -s build/server-setup.sh # Strip docummentation
 	$(info Script has been successfully built)

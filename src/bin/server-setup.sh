@@ -1,10 +1,15 @@
 #!/bin/sh
 # Created by Jacob Hrbek <kreyren@rixotstudio.cz> under GPLv3 license <https://www.gnu.org/licenses/gpl-3.0.en.html> in 13.07.2020 12:02:48 CEST
 
-#% BUILD-CHECK
+#& BUILD-CHECK
 printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make build' and reinvoke the script from build directory"; exit 88
 
 # shellcheck shell=sh # Written to be POSIX-comatible
+# shellcheck source=src/sefunc/00-bootloader.sh
+# shellcheck source=src/sefunc/00-kernel.sh
+# shellcheck source=src/sefunc/00-smtp.sh
+# shellcheck source=src/sefunc/00-sshd.sh
+# shellcheck source=src/sefunc/00-tor.sh
 
 ###! Administrative script to configure target system to RiXotStudio's standard and expected functionality
 ###! Requires:
@@ -38,15 +43,19 @@ printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make 
 
 # Upstream info
 UPSTREAM="https://github.com/RiXotStudio/server-setup"
+# shellcheck disable=SC2034 # UPSTREAM_NAME is not used, remove disable directive when used
 UPSTREAM_NAME="RiXotStudio"
-# shellcheck disable=SC2034 # UPSTREAM_EMAIL is not used, remove when used
+# shellcheck disable=SC2034 # not used, remove disable directive when used
 UPSTREAM_EMAIL="info@rixotstudio.cz"
 # Maintainer info
 MAINTAINER_EMAIL="kreyren@rixotstudio.cz"
 MAINTAINER_REPOSITORY="https://github.com/RiXotStudio/server-setup"
 MAINTAINER_NICKNAME="kreyren"
+# shellcheck disable=SC2034 # Used in src/sefunc/00-tor.sh
 MAINTAINER_NAME="Jacob"
+# shellcheck disable=SC2034 # Used in src/sefunc/00-tor.sh
 MAINTAINER_SURNAME="Hrbek"
+# shellcheck disable=SC2034 # Used in src/sefunc/00-tor.sh
 MAINTAINER_PUBKEY="765AED304211C28410D5C478FCBA0482B0AB9F10"
 
 # NOTICE(Krey): By default busybox outputs a full path in '$0' this is used to strip it
@@ -143,25 +152,25 @@ set -e
 
 # These are appended from https://github.com/RXT0112/Zernit/tree/master/src/RXT0112-1/downstream-classes/zeres-0/bash/output
 # Fatal output handling with method to specify exit code and show helpful message for the end-user and in logs
-#% APPEND die
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/die.sh
 
 # Function to show warning message for the end-user and in logs
-#% APPEND ewarn
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/ewarn.sh
 
 # Function to show debug messages in logs or for the end-user if variable DEBUG is set on value '1'
-#% APPEND edebug
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/edebug.sh
 
 # Function to output error message
-#% APPEND eerror
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/eerror.sh
 
 # Function to output fixme messages for unimplemented/expected features that doesn't prevent runtime
-#% APPEND efixme
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/efixme.sh
 
 # Function to relay an output in logs
-#% APPEND elog
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/elog.sh
 
 # Function to perform benchmarks in specified parts of the code
-#% APPEND ebench
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/ebench.sh
 
 # Identify system
 if command -v "$UNAME" 1>/dev/null; then
@@ -240,6 +249,16 @@ elif ! command -v hostname 1>/dev/null && [ ! -s /etc/hostname ]; then
 else
 	die unexpected "processing hostname"
 fi
+
+#& APPEND src/bin/sefunc/00-bootloader.sh
+
+#& APPEND src/bin/sefunc/00-kernel.sh
+
+#& APPEND src/bin/sefunc/00-smtp.sh
+
+#& APPEND src/bin/sefunc/00-sshd.sh
+
+#& APPEND src/bin/sefunc/00-tor.sh
 
 # This is a stub implementation
 efixme "Implement logic to determine which bootloader is used" # FIXME

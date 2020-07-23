@@ -45,6 +45,7 @@ setup_tor() { funcname="setup_tor"
 	# Configure torrc
 	case "$KERNEL" in
 		"linux")
+			# shellcheck disable=SC2039 # HOSTNAME is undefined on posix, but defined by our script in src/bin/server-setup.sh
 			cat <<-EOF > /etc/tor/torrc
 				Nickname $UPSTREAM_NAME/$HOSTNAME
 				ContactInfo 0x$MAINTAINER_PUBKEY $MAINTAINER_NAME $MAINTAINER_SURNAME <$MAINTAINER_EMAIL>
