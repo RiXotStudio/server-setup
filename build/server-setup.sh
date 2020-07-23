@@ -1,35 +1,9 @@
 #!/bin/sh
 # Created by Jacob Hrbek <kreyren@rixotstudio.cz> under GPLv3 license <https://www.gnu.org/licenses/gpl-3.0.en.html> in 13.07.2020 12:02:48 CEST
 
-#% BUILD-CHECK
-printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make build' and reinvoke the script from build directory"; exit 88
 
 # shellcheck shell=sh # Written to be POSIX-comatible
 
-###! Administrative script to configure target system to RiXotStudio's standard and expected functionality
-###! Requires:
-###! - Anything to run posix shell scripts e.g busybox
-###! - Command 'lsb_release' to identify distribution on linux
-###! - Command 'uname' to identify used kernel
-###! Exit codes:
-###! - FIXME-DOCS(Krey): Defined in die()
-###! Tested Platforms:
-###! - [ ] Linux
-###!  - [ ] Debian
-###!  - [ ] Devuan
-###!  - [ ] Ubuntu
-###!  - [ ] Fedora
-###!  - [ ] NixOS
-###!  - [ ] Archlinux
-###!  - [ ] Alpine
-###! - [ ] FreeBSD
-###! - [ ] Darwin
-###! - [ ] Redox
-###! - [ ] ReactOS
-###! - [ ] Windows
-###! - [ ] Windows/Cygwin
-###! Resources:
-###! - https://pkgs.org | To search Linux distros for files and package informations
 
 # FIXME: Implement tor option for relevant commands
 # FIXME: Implement parts of this code in separate files so that it's more readable
@@ -143,25 +117,347 @@ set -e
 
 # These are appended from https://github.com/RXT0112/Zernit/tree/master/src/RXT0112-1/downstream-classes/zeres-0/bash/output
 # Fatal output handling with method to specify exit code and show helpful message for the end-user and in logs
-#% APPEND die
+
+
+
+die() { funcname="die"
+	case "$3" in
+		"true")
+			# In case no message is provided
+			if [ -z "$3" ]; then
+				if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+					case "$LANG" in
+						# FIXME-TRANSLATE: Translate in your language
+						en-*|*)
+							"$PRINTF" "$DIE_FORMAT_STRING_TRUE" "Exitted successfully"
+							"$PRINTF" "$DIE_FORMAT_STRING_TRUE" "Exitted successfully" >> "$logPath"
+					esac
+				elif [ "$DEBUG" = 1 ]; then
+					case "$LANG" in
+						en-*|*)
+							# FIXME-TRANSLATE: Translate in your language
+							"$PRINTF" "$DIE_FORMAT_STRING_TRUE_DEBUG" "Exitted successfully"
+							"$PRINTF" "$DIE_FORMAT_STRING_TRUE_DEBUG" "Exitted successfully" >> "$logPath"
+					esac
+				else
+					# NOTICE(Krey): Do not use die() in die for unexpected
+					case "$LANG" in
+						# FIXME-TRANSLATE: Translate in your language
+						en-*|*) "$PRINTF" 'BUG: %s\n' "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+					esac
+				fi
+			# Message on second argument is provided
+			elif [ -n "$3" ]; then
+				if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+					"$PRINTF" "$DIE_FORMAT_STRING_TRUE" "$3"
+					"$PRINTF" "$DIE_FORMAT_STRING_TRUE" "$3" >> "$logPath"
+				elif [ "$DEBUG" = 1 ]; then
+					"$PRINTF" "$DIE_FORMAT_STRING_TRUE_DEBUG" "$3"
+					"$PRINTF" "$DIE_FORMAT_STRING_TRUE_DEBUG" "$3" >> "$logPath"
+				else
+					# NOTICE(Krey): Do not use die() in die for unexpected
+					case "$LANG" in
+						# FIXME-TRANSLATE: Translate in your language
+						en-*|*) "$PRINTF" 'BUG: %s\n' "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+					esac
+				fi
+			fi
+
+			# Assertion
+			case "$KERNEL" in
+				linux)
+					unset funcname
+					exit 0 ;;
+				windows)
+					unset funcname
+					exit 1 ;;
+				*)
+					"$PRINTF" 'BUG: %s\n' "Invalid kernel has been provided in $myName for arguments '$*': $KERNEL"
+					unset funcname
+					exit 255
+			esac
+		;;
+		"false")
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_FALSE" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_FALSE_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_FALSE_DEBUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_FALSE_DEBUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			else
+				case "$LANG" in
+					# FIXME-TRANSLATE: Translate in your language
+					en-*|*) "$PRINTF" 'BUG: %s\n' "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi
+
+			# Assertion
+			case "$KERNEL" in
+				linux)
+					unset funcname
+					exit 1 ;;
+				windows)
+					unset funcname
+					exit 0 ;;
+				*)
+					"$PRINTF" 'BUG: %s\n' "Invalid kernel has been provided in $myName: $KERNEL"
+					unset funcname
+					exit 223
+			esac
+		;;
+		28|"security")
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_SECURITY" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_SECURITY_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_SECURITY_DEBUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_SECURITY_DEBUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			else
+				case "$LANG" in
+						# FIXME-TRANSLATE: Translate in your language
+						en-*|*) "$PRINTF" 'BUG: %s\n' "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi
+
+			unset funcname
+			exit 28 # In case 'fixme' argument is provided
+		;;
+		38|"fixme") # For features that needs to be implemented and prefents runtime from continuing
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_FIXME" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_FIXME_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_FIXME_DEBUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_FIXME_DEBUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			else
+				case "$LANG" in
+						# FIXME-TRANSLATE: Translate in your language
+						en-*|*) "$PRINTF" 'BUG: %s\n' "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi
+
+			unset funcname
+			exit 38 # In case 'fixme' argument is provided
+		;;
+		111|"invalid-format")
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT_DEBUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT_DEBUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			else
+				case "$LANG" in
+					# FIXME-TRANSLATE: Translate to more languages
+					en-*|*) "$PRINTF" "$DIE_FORMAT_STRING" "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi
+
+			unset funcname
+			exit 223 # In case 'bug' is used
+		;;
+		223|"bug") # Unexpected trap
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_BUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_BUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_BUG_DEBUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_BUG_DEBUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			else
+				case "$LANG" in
+					# FIXME-TRANSLATE: Translate to more languages
+					en-*|*) "$PRINTF" "$DIE_FORMAT_STRING" "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi
+
+			unset funcname
+			exit 223 # In case 'bug' is used
+		;;
+		255|"unexpected") # Unexpected trap
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_UNEXPECTED" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_UNEXPECTED_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$DIE_FORMAT_STRING_UNEXPECTED_DEBUG" "$3" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+				"$PRINTF" "$DIE_FORMAT_STRING_UNEXPECTED_DEBUG_LOG" "$3" >> "$logPath" || { "$PRINTF" "$DIE_FORMAT_STRING_INVALID_FORMAT" "Invalid format string was parsed in $funcname calling argument '$2' with message '$3'"; exit 111 ;}
+			else
+				case "$LANG" in
+					# FIXME-TRANSLATE: Translate to more languages
+					en-*|*) "$PRINTF" "$DIE_FORMAT_STRING" "Unexpected happend while processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi
+
+			unset funcname
+			exit 255 # In case 'unexpected' is used
+		;;
+		*)
+			case "$LANG" in
+				# FIXME-TRANSLATE: Translate to more languages
+				en-*|*) "$PRINTF" 'BUG: %s\n' "Invalid argument '$3' has been provided in $myName"
+			esac
+			unset funcname
+			exit 255
+	esac
+}; alias die='die "$LINENO"'
 
 # Function to show warning message for the end-user and in logs
-#% APPEND ewarn
+
+
+
+ewarn() { funcname="ewarn"
+	if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+		"$PRINTF" "$EWARN_FORMAT_STRING" "$2" || die invalid-format
+		"$PRINTF" "$EWARN_FORMAT_STRING_LOG" "$2" >> "$logPath" || die invalid-format
+		unset funcname
+		exit 0
+	elif [ "$DEBUG" = 1 ]; then
+		"$PRINTF" "$EWARN_FORMAT_STRING_DEBUG" "$2" || die invalid-format
+		"$PRINTF" "$EWARN_FORMAT_STRING_DEBUG_LOG" "$2" >> "$logPath" || die invalid-format
+		unset funcname
+		exit 0
+	else
+		case "$LANG" in
+			# FIXME-TRANSLATE: Translate to more languages
+			en-*|*) die bug "processing variable DEBUG with value '$DEBUG' in $funcname"
+		esac
+	fi
+}; alias ewarn='ewarn "$LINENO"'
 
 # Function to show debug messages in logs or for the end-user if variable DEBUG is set on value '1'
-#% APPEND edebug
+
+
+
+edebug() { funcname="edebug"
+	efixme "Implement debug channels in $funcname"
+	if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+		"$PRINTF" "$EDEBUG_FORMAT_STRING" "$2" || die invalid-format
+		"$PRINTF" "$EDEBUG_FORMAT_STRING_LOG" "$2" >> "$logPath" || die invalid-format
+		unset funcname
+		exit 0
+	elif [ "$DEBUG" = 1 ]; then
+		"$PRINTF" "$EDEBUG_FORMAT_STRING_DEBUG" "$2" || die invalid-format
+		"$PRINTF" "$EDEBUG_FORMAT_STRING_DEBUG_LOG" "$2" >> "$logPath" || die invalid-format
+		unset funcname
+		exit 0
+	else
+		case "$LANG" in
+			# FIXME-TRANSLATE: Translate to more languages
+			en-*|*) die 255 "processing variable DEBUG with value '$DEBUG' in $funcname"
+		esac
+	fi
+}; alias die='die "$LINENO"'
 
 # Function to output error message
-#% APPEND eerror
+
+
+
+eerror() { funcname="eerror"
+	if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+		"$PRINTF" "$EERROR_FORMAT_STRING" "$2" || die invalid-format
+		"$PRINTF" "$EERROR_FORMAT_STRING_LOG" "$2" >> "$logPath" || die invalid-format
+		unset funcname
+		exit 0
+	elif [ "$DEBUG" = 1 ]; then
+		"$PRINTF" "$EERROR_FORMAT_STRING_DEBUG" "$2" || die invalid-format
+		"$PRINTF" "$EERROR_FORMAT_STRING_DEBUG_LOG" "$2" >> "$logPath" || die invalid-format
+		unset funcname
+		exit 0
+	else
+		case "$LANG" in
+			# FIXME-TRANSLATE: Translate to more languages
+			en-*|*) die bug "processing variable DEBUG with value '$DEBUG' in $funcname"
+		esac
+	fi
+}; alias eerror='eerror "$LINENO"'
 
 # Function to output fixme messages for unimplemented/expected features that doesn't prevent runtime
-#% APPEND efixme
+
+
+
+
+efixme() { funcname="efixme"
+	if [ "$IGNORE_FIXME" = 1 ]; then
+		# FIXME: Implement 'fixme' debug channel
+		edebug fixme "Fixme message for '$2' disabled"
+		exit 0
+	elif [ "$IGNORE_FIXME" = 0 ] || [ -z "$IGNORE_FIXME" ]; then
+		if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+			"$PRINTF" "$EFIXME_FORMAT_STRING" "$2" || die invalid-format
+			"$PRINTF" "$EFIXME_FORMAT_STRING" "$2" >> "$logPath" || die invalid-format
+			unset funcname
+			exit 0
+		elif [ "$DEBUG" = 1 ]; then
+			"$PRINTF" "$EFIXME_FORMAT_STRING_DEBUG" "$2" || die invalid-format
+			"$PRINTF" "$EFIXME_FORMAT_STRING_DEBUG_LOG" "$2" >> "$logPath" || die invalid-format
+			unset funcname
+			exit 0
+		else
+			case "$LANG" in
+				# FIXME-TRANSLATE: Translate to more languages
+				en-*|*) die 255 "processing DEBUG variable with value '$DEBUG' in $funcname"
+			esac
+		fi
+	else
+		case "$LANG" in
+			# FIXME-TRANSLATE: Translate to more languages
+			en-*|*) die 255 "processing variable IGNORE_FIXME with value '$IGNORE_FIXME' in $0"
+		esac
+	fi
+}; alias efixme='efixme "$LINENO"'
 
 # Function to relay an output in logs
-#% APPEND elog
+
+
+
+elog() { funcname="elog"
+	case "$2" in
+		"debug")
+			if [ "$DEBUG" = 0 ] || [ -z "$DEBUG" ]; then
+				unset funcname
+				exit 0
+			elif [ "$DEBUG" = 1 ]; then
+				"$PRINTF" "$ELOG_FORMAT_STRING_DEBUG_LOG" "$2" >> "$logPath" || die invalid-format
+				unset funcname
+				exit 0
+			else
+				case "$LANG" in
+					# FIXME-TRANSLATE: Translate to more languages
+					en-*|*) die bug "processing variable DEBUG with value '$DEBUG' in $funcname"
+				esac
+			fi ;;
+		*) die bug "Invalid argument '$2' has been parsed to $funcname"
+	esac
+}; alias einfo='einfo "$LINENO"'
 
 # Function to perform benchmarks in specified parts of the code
-#% APPEND ebench
+
+
+
+
+ebench() { funcname="ebench"
+	case "$SKIP_BENCHMARK" in
+		1)
+		 	unset funcname
+			exit 0 ;;
+		0|"") edebug 3 "Benchmark was not skipped" ;;
+		*) die 23 "Variable SKIP_BENCHMARK has unexpected value '$SKIP_BENCHMARK', expecting only '1' or blank"
+	esac
+
+	case "$2" in
+		start)
+			printf "$EBENCH_FORMAT_STRING_START" "$2" || die invalid-format
+			# POSIX: We might be able to use /proc/uptime on Unix
+			efixme "Variable 'SECONDS' is not POSIX compatible, implement logic"
+			SECONDS=0
+			unset funcname
+			exit 0 ;;
+		result)
+			printf "$EBENCH_FORMAT_STRING_RESULT" "$2" || die invalid-format
+			unset funcname
+			exit 0 ;;
+		*) die 2 "Invalid argument '$2' has been parsed in $funcname"
+	esac
+}; alias ebench='ebench "$LINENO"'
 
 # Identify system
 if command -v "$UNAME" 1>/dev/null; then
