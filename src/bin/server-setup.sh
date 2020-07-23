@@ -250,15 +250,15 @@ else
 	die unexpected "processing hostname"
 fi
 
-#& APPEND src/bin/sefunc/00-bootloader.sh
+#& APPEND src/sefunc/00-bootloader.sh
 
-#& APPEND src/bin/sefunc/00-kernel.sh
+#& APPEND src/sefunc/00-kernel.sh
 
-#& APPEND src/bin/sefunc/00-smtp.sh
+#& APPEND src/sefunc/00-smtp.sh
 
-#& APPEND src/bin/sefunc/00-sshd.sh
+#& APPEND src/sefunc/00-sshd.sh
 
-#& APPEND src/bin/sefunc/00-tor.sh
+#& APPEND src/sefunc/00-tor.sh
 
 # This is a stub implementation
 efixme "Implement logic to determine which bootloader is used" # FIXME

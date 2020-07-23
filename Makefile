@@ -36,15 +36,19 @@ vendor: clean
 
 ###! We are using '#@ APPEND something' in the code that is being replaced with a code from a vendor using ed
 
+# FIXME-SUGGESTION: @ while IFS= read -r line; do case "$$line" in '#& APPEND '*) cat "$${line##'#& APPEND '}" ;; *) printf '%s\n' "$$line" ;; esac; done < src/bin/server-setup.sh > build/server-setup.sh
 # FIXME: This creates additional 3 lines in between comment and '#% APPEND ...'
 #@ Build the script
 build: vendor
 	$(info Building..)
 	@ [ -d build ] || mkdir build
 	@ [ -f build/server-setup.sh ] || cp src/bin/server-setup.sh build/server-setup.sh
-	@ grep "^#% APPEND.*" src/bin/server-setup.sh | while IFS= read -r string; do cp "${string##\#& APPEND}" "vendor/${string##*/}" && printf "g/^#.*/d\nw\nq\n" | ed -s "vendor/${string##*/}" && printf "/^#& APPEND ${string##\#& APPEND}/d\\n-1r ${string##\#& APPEND}\\nw\\nq\\n" | ed -s build/server-setup.sh; done # Replace '#& APPEND' flags with their specified path
-	@ printf '/^#%% BUILD-CHECK/d\nd\nw\nq\n' | ed -s build/server-setup.sh # Remove the BUILD-CHECK
-	@ printf 'g/###!.*/d\nw\nq\n' | ed -s build/server-setup.sh # Strip docummentation
+	@ grep "^#& APPEND.*" src/bin/server-setup.sh | while IFS= read -r string; do \
+		printf '%s\n' "Processing $${string##*/} from appended" \
+		&& cp "$${string##\#& APPEND }" "vendor/$${string##*/}" \
+		&& printf "g/#.*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+		&& printf "/^#& APPEND $$(printf '%s\n' "$${string##\#& APPEND }" | sed "s#\/#\\\/#gm")/d\n-1r vendor/$${string##*/}\\nw\\nq\\n" | ed -s build/server-setup.sh; done # Replace '#& APPEND' flags with their specified path
+	@ printf '/^#& BUILD-CHECK/d\nd\nw\nq\n' | ed -s build/server-setup.sh # Remove the BUILD-CHECK
 	$(info Script has been successfully built)
 
 #@ Format the built result to be more storage efficient

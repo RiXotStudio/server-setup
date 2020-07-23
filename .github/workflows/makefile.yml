@@ -1,0 +1,33 @@
+name: Markdown
+
+# Relevant to events - https://help.github.com/en/actions/automating-your-workflow-with-github-actions/events-that-trigger-workflows
+on:
+  pull_request:
+    types: ready_for_review
+    paths:
+    - 'Makefile'
+
+jobs:
+  # Linting
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Installing dependencies..
+        run: |
+          go get github.com/mrtazz/checkmake
+          cd $GOPATH/src/github.com/mrtazz/checkmake
+          make
+          make install
+      - name: Processing files..
+        # Make sure that bash is used
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE"
+
+          # Process files
+          ## NOTICE: Do not use for loop to avoid pitfall https://mywiki.wooledge.org/BashPitfalls#pf1
+          git --git-dir="$GITHUB_WORKSPACE/.git" ls-files -z -- '*.md' | while IFS= read -rd '' file; do
+              printf 'linting makefile file %s\n' "$file"
+              checkmake "$file"
+          done
