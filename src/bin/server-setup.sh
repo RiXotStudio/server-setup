@@ -254,11 +254,13 @@ fi
 
 #& APPEND src/sefunc/00-kernel.sh
 
+#& APPEND src/sefunc/00-tor.sh
+
+#& APPEND src/sefunc/00-torsocks.sh
+
 #& APPEND src/sefunc/00-smtp.sh
 
 #& APPEND src/sefunc/00-sshd.sh
-
-#& APPEND src/sefunc/00-tor.sh
 
 # This is a stub implementation
 efixme "Implement logic to determine which bootloader is used" # FIXME
@@ -352,17 +354,28 @@ while [ "$#" -gt 0 ]; do case "$1" in
 		# Set up tor
 		setup_tor
 
+		# Configuration torsocks
+		setup_torsocks
+
 		# Configure bootloader
 		setup_bootloader
 
-		# Kernel Configuration
+		# Configure kernel
 		setup_kernel
 
-		# SSH Daemon configuration
+		# Configure SSH Daemon
 		setup_sshd
 
-		# SMTP Configuration
+		# Configure SMTP provider
 		setup_smtp
+
+		# NOTICE(Krey): Currently we are using Dovecot which provides both POP3 and IMAP and so only setup_pop3 is called
+
+		# Configure POP3 provider
+		setup_pop3
+
+		# Configure IMAP provider
+		#setup_imap
 	;;
 	"setup-tor")
 		setup_tor

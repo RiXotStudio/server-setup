@@ -5,14 +5,27 @@
 # shellcheck shell=sh # Written to be POSIX-compatible
 # shellcheck source=src/bin/server-setup.sh
 
+# shellcheck disable=SC2039 # HOSTNAME is undefined in posix, but defined by our logic
+
 ###! Workflow made to configure SMTP handler on RiXotStudio's systems
-###! We are using 'postfix' for reasons stated in https://github.com/Kreyren/kreyren/issues/24
+###! We are using 'postfix' for reasons stated in :3
+###! Privacy concerns
+###! - [ ] it is not acceptable for ISP or anyone scanning the network to know that there is an encrypted SMTP/POP3/IMAP traffic going from server A to server B
+###!  - SOLUTION: OnionMX
 ###! CHECKLIST
 ###! - [ ] Reachable from clearweb
 ###! - [ ] Reachable from darkweb
 ###! - [ ] Disable non-encrypted ports
+###! - [ ] PGP supported
+###! Relevant:
+###! - MX delivery through onion https://github.com/ehloonion/onionmx
+
+# FIXME: Set up SRV record https://github.com/ehloonion/onionmx/blob/master/SRV.md
 
 setup_smtp() { funcname="setup_smtp"
+	# FIXME-QA(Krey): There should be a better implementation for this
+	domain="rixotstudio.cz"
+
 	case "$KERNEL" in
 		"linux")
 			case "$DISTRO/$RELEASE" in
@@ -22,7 +35,30 @@ setup_smtp() { funcname="setup_smtp"
 
 					# Configure
 					cat <<-EOF > /etc/postfix/main.cf
-						# WARNING: Be careful when dealing with smtpd_*_restrictions, it's easy to accidentally turn your MTA into open relay if you're not careful with ordering of rules
+						# WARNING-SUGGESTION: Be careful when dealing with smtpd_*_restrictions, it's easy to accidentally turn your MTA into open relay if you're not careful with ordering of rules
+						# - NOTICE(Krey): Using debian/devuan downstream values, otherwise not touched
+
+						# FIXME(Krey): wtf is biff and why is debian setting it to 'no' by default?
+						biff = no
+
+						# appending .domain in the MUA's job
+						append_dot_mydomain = no
+
+						# TLS parameters
+						smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+						smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+						smtpd_tls_security_level=may
+
+						smtp_tls_CApath=/etc/ssl/certs
+						smtp_tls_security_level=may
+						smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
+
+						smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+						mailbox_size_limit = 0
+
+						# Uncomment the next line to generate "delayed mail" warnings
+						# FIXME(Krey): Do we want this?
+						#delay_warning_time = 4h
 
 						# Global Postfix configuration file. This file lists only a subset
 						# of all parameters. For the syntax, and for a complete parameter
@@ -73,26 +109,26 @@ setup_smtp() { funcname="setup_smtp"
 						# See the files in examples/chroot-setup for setting up Postfix chroot
 						# environments on different UNIX systems.
 						#
-						queue_directory = /var/spool/postfix
+						#queue_directory = /var/spool/postfix
 
 						# The command_directory parameter specifies the location of all
 						# postXXX commands.
 						#
 						# FIXME-SECURITY: Check needed
-						command_directory = /usr/sbin
+						#command_directory = /usr/sbin
 
 						# The daemon_directory parameter specifies the location of all Postfix
 						# daemon programs (i.e. programs listed in the master.cf file). This
 						# directory must be owned by root.
 						#
 						# FIXME: Why does this have to be owned by root?
-						daemon_directory = /usr/lib/postfix/sbin
+						#daemon_directory = /usr/lib/postfix/sbin
 
 						# The data_directory parameter specifies the location of Postfix-writable
 						# data files (caches, random numbers). This directory must be owned
 						# by the mail_owner account (see below).
 						#
-						data_directory = /var/lib/postfix
+						#data_directory = /var/lib/postfix
 
 						# QUEUE AND PROCESS OWNERSHIP
 						#
@@ -103,14 +139,14 @@ setup_smtp() { funcname="setup_smtp"
 						# particular, don't specify nobody or daemon. PLEASE USE A DEDICATED
 						# USER.
 						#
-						mail_owner = postfix
+						#mail_owner = postfix
 
 						# The default_privs parameter specifies the default rights used by
 						# the local delivery agent for delivery to external file or command.
 						# These rights are used in the absence of a recipient user context.
 						# DO NOT SPECIFY A PRIVILEGED USER OR THE POSTFIX OWNER.
 						#
-						default_privs = nobody
+						#default_privs = nobody
 
 						# INTERNET HOST AND DOMAIN NAMES
 						#
@@ -119,7 +155,7 @@ setup_smtp() { funcname="setup_smtp"
 						# from gethostname(). \$myhostname is used as a default value for many
 						# other configuration parameters.
 						#
-						myhostname = dreamon.rixotstudio.cz
+						myhostname = $HOSTNAME.rixotstudio.cz
 
 						# The mydomain parameter specifies the local internet domain name.
 						# The default is to use \$myhostname minus the first component.
@@ -145,7 +181,7 @@ setup_smtp() { funcname="setup_smtp"
 						# first line of that file to be used as the name.  The Debian default
 						# is /etc/mailname.
 						#
-						myorigin = \$mydomain
+						#myorigin = \$mydomain
 
 						# RECEIVING MAIL
 
@@ -160,9 +196,8 @@ setup_smtp() { funcname="setup_smtp"
 						# Note: you need to stop/start Postfix when this parameter changes.
 						#
 						# FIXME-SECURITY: Sanitize?
+						# NOTICE(Krey): Using default value provided by debian/devuan downstream
 						inet_interfaces = all
-						#inet_interfaces = \$myhostname
-						#inet_interfaces = \$myhostname, localhost
 
 						# The proxy_interfaces parameter specifies the network interface
 						# addresses that this mail system receives mail on by way of a
@@ -207,10 +242,7 @@ setup_smtp() { funcname="setup_smtp"
 						# See also below, section "REJECTING MAIL FOR UNKNOWN LOCAL USERS".
 						#
 						# FIXME: TLDR
-						#mydestination = \$myhostname, localhost.\$mydomain, localhost
-						#mydestination = \$myhostname, localhost.\$mydomain, localhost, \$mydomain
-						#mydestination = \$myhostname, localhost.\$mydomain, localhost, \$mydomain,
-						#	mail.\$mydomain, www.\$mydomain, ftp.\$mydomain
+						mydestination = \$myhostname, $HOSTNAME.$domain, localhost.$domain, , localhost
 
 						# REJECTING MAIL FOR UNKNOWN LOCAL USERS
 						#
@@ -265,7 +297,7 @@ setup_smtp() { funcname="setup_smtp"
 						# with 450 (try again later) until you are certain that your
 						# local_recipient_maps settings are OK.
 						#
-						unknown_local_recipient_reject_code = 550
+						#unknown_local_recipient_reject_code = 550
 
 						# TRUST AND RELAY CONTROL
 
@@ -308,11 +340,7 @@ setup_smtp() { funcname="setup_smtp"
 						# You can also specify the absolute pathname of a pattern file instead
 						# of listing the patterns here. Specify type:table for table-based lookups
 						# (the value on the table right-hand side is not used).
-						#
-						#mynetworks = 168.100.189.0/28, 127.0.0.0/8
-						#mynetworks = \$config_directory/mynetworks
-						#mynetworks = hash:/etc/postfix/network_table
-						mynetworks = 127.0.0.0/8
+						mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
 
 						# The relay_domains parameter restricts what destinations this system will
 						# relay mail to.  See the smtpd_recipient_restrictions description in
@@ -358,12 +386,8 @@ setup_smtp() { funcname="setup_smtp"
 						# [address] or [address]:port; the form [host] turns off MX lookups.
 						#
 						# If you're connected via UUCP, see also the default_transport parameter.
-						#
-						#relayhost = \$mydomain
-						#relayhost = [gateway.my.domain]
-						#relayhost = [mailserver.isp.tld]
-						#relayhost = uucphost
-						#relayhost = [an.ip.add.ress]
+						# NOTICE(Krey): Left blank by debian/devuan downstream
+						relayhost =
 
 						# REJECTING UNKNOWN RELAY USERS
 						#
@@ -395,7 +419,7 @@ setup_smtp() { funcname="setup_smtp"
 						# Specify 0 to disable the feature. Valid delays are 0..10.
 						#
 						# NOTICE(Krey): Still in development -> Disabled
-						in_flow_delay = 0
+						#in_flow_delay = 0
 
 						# ADDRESS REWRITING
 						#
@@ -432,20 +456,14 @@ setup_smtp() { funcname="setup_smtp"
 						# It will take a minute or so before changes become visible.  Use
 						# "postfix reload" to eliminate the delay.
 						#
-						#alias_maps = dbm:/etc/aliases
-						#alias_maps = hash:/etc/aliases
-						#alias_maps = hash:/etc/aliases, nis:mail.aliases
-						#alias_maps = netinfo:/aliases
+						alias_maps = hash:/etc/aliases
 
 						# The alias_database parameter specifies the alias database(s) that
 						# are built with "newaliases" or "sendmail -bi".  This is a separate
 						# configuration parameter, because alias_maps (see above) may specify
 						# tables that are not necessarily all under control by Postfix.
 						#
-						#alias_database = dbm:/etc/aliases
-						#alias_database = dbm:/etc/mail/aliases
-						#alias_database = hash:/etc/aliases
-						#alias_database = hash:/etc/aliases, hash:/opt/majordomo/aliases
+						alias_database = hash:/etc/aliases
 
 						# ADDRESS EXTENSIONS (e.g., user+foo)
 						#
@@ -456,7 +474,7 @@ setup_smtp() { funcname="setup_smtp"
 						# Basically, the software tries user+foo and .forward+foo before
 						# trying user and .forward.
 						#
-						#recipient_delimiter = +
+						recipient_delimiter = +
 
 						# DELIVERY TO MAILBOX
 						#
@@ -512,7 +530,7 @@ setup_smtp() { funcname="setup_smtp"
 						# the main.cf file, otherwise the SMTP server will reject mail for
 						# non-UNIX accounts with "User unknown in local recipient table".
 						#
-						# Cyrus IMAP over LMTP. Specify ``lmtpunix      cmd="lmtpd"
+						# Cyrus IMAP over LMTP. Specify \`\`lmtpunix      cmd="lmtpd"
 						# listen="/var/imap/socket/lmtp" prefork=0'' in cyrus.conf.
 						#mailbox_transport = lmtp:unix:/var/imap/socket/lmtp
 						#
@@ -602,7 +620,7 @@ setup_smtp() { funcname="setup_smtp"
 						#
 						#smtpd_banner = \$myhostname ESMTP \$mail_name
 						#smtpd_banner = \$myhostname ESMTP \$mail_name (\$mail_version)
-						smtpd_banner = \$myhostname ESMTP \$mail_name (Debian/GNU)
+						smtpd_banner = \$myhostname ESMTP \$mail_name (Devuan/GNU)
 
 
 						# PARALLEL DELIVERY TO THE SAME DESTINATION
@@ -646,9 +664,9 @@ setup_smtp() { funcname="setup_smtp"
 						# the process marches on. If you use an X-based debugger, be sure to
 						# set up your XAUTHORITY environment variable before starting Postfix.
 						#
-						debugger_command =
-							 PATH=/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin
-							 ddd \$daemon_directory/\$process_name \$process_id & sleep 5
+						#debugger_command =
+						#	 PATH=/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin
+						#	 ddd \$daemon_directory/\$process_name \$process_id & sleep 5
 
 						# If you can't use X, use this to capture the call stack when a
 						# daemon crashes. The result is in a file in the configuration
@@ -676,42 +694,200 @@ setup_smtp() { funcname="setup_smtp"
 						# sendmail_path: The full pathname of the Postfix sendmail command.
 						# This is the Sendmail-compatible mail posting interface.
 						#
-						sendmail_path =
+						#sendmail_path =
 
 						# newaliases_path: The full pathname of the Postfix newaliases command.
 						# This is the Sendmail-compatible command to build alias databases.
 						#
-						newaliases_path =
+						#newaliases_path =
 
 						# mailq_path: The full pathname of the Postfix mailq command.  This
 						# is the Sendmail-compatible mail queue listing command.
 						#
-						mailq_path =
+						#mailq_path =
 
 						# setgid_group: The group for mail submission and queue management
 						# commands.  This must be a group name with a numerical group ID that
 						# is not shared with other accounts, not even with the Postfix account.
 						#
-						setgid_group =
+						#setgid_group =
 
 						# html_directory: The location of the Postfix HTML documentation.
 						#
-						html_directory =
+						#html_directory =
 
 						# manpage_directory: The location of the Postfix on-line manual pages.
 						#
-						manpage_directory =
+						#manpage_directory =
 
 						# sample_directory: The location of the Postfix sample configuration files.
 						# This parameter is obsolete as of Postfix 2.1.
 						#
-						sample_directory =
+						#sample_directory =
 
 						# readme_directory: The location of the Postfix README files.
 						#
-						readme_directory =
-						inet_protocols = ipv4
+						readme_directory = no
+
+						# FIXME(Krey): Info needed
+						# NOTICE(Krey): Using value from debian/devuan downstream
+						inet_protocols = all
+
+						# OnionMX configuration: https://github.com/ehloonion/onionmx/blob/master/postfix.md#setup-a-dns-srv-record-and-a-tcp-map
+						transport_maps = hash:/etc/postfix/tor_transport
 					EOF
+
+					cat <<-EOF > /etc/postfix/master.cf
+						#
+						# Postfix master process configuration file.  For details on the format
+						# of the file, see the master(5) manual page (command: "man 5 master" or
+						# on-line: http://www.postfix.org/master.5.html).
+						#
+						# Do not forget to execute "postfix reload" after editing this file.
+						#
+						# ==========================================================================
+						# service type private unpriv  chroot  wakeup  maxproc command + args
+						#              (yes)   (yes)   (no)    (never) (100)
+						# ==========================================================================
+						smtp      inet  n       -       y       -       -       smtpd
+						#smtp      inet  n       -       y       -       1       postscreen
+						#smtpd     pass  -       -       y       -       -       smtpd
+						#dnsblog   unix  -       -       y       -       0       dnsblog
+						#tlsproxy  unix  -       -       y       -       0       tlsproxy
+						#submission inet n       -       y       -       -       smtpd
+						#  -o syslog_name=postfix/submission
+						#  -o smtpd_tls_security_level=encrypt
+						#  -o smtpd_sasl_auth_enable=yes
+						#  -o smtpd_tls_auth_only=yes
+						#  -o smtpd_reject_unlisted_recipient=no
+						#  -o smtpd_client_restrictions=\$mua_client_restrictions
+						#  -o smtpd_helo_restrictions=\$mua_helo_restrictions
+						#  -o smtpd_sender_restrictions=\$mua_sender_restrictions
+						#  -o smtpd_recipient_restrictions=
+						#  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+						#  -o milter_macro_daemon_name=ORIGINATING
+						#smtps     inet  n       -       y       -       -       smtpd
+						#  -o syslog_name=postfix/smtps
+						#  -o smtpd_tls_wrappermode=yes
+						#  -o smtpd_sasl_auth_enable=yes
+						#  -o smtpd_reject_unlisted_recipient=no
+						#  -o smtpd_client_restrictions=\$mua_client_restrictions
+						#  -o smtpd_helo_restrictions=\$mua_helo_restrictions
+						#  -o smtpd_sender_restrictions=\$mua_sender_restrictions
+						#  -o smtpd_recipient_restrictions=
+						#  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+						#  -o milter_macro_daemon_name=ORIGINATING
+						#628       inet  n       -       y       -       -       qmqpd
+						pickup    unix  n       -       y       60      1       pickup
+						cleanup   unix  n       -       y       -       0       cleanup
+						qmgr      unix  n       -       n       300     1       qmgr
+						#qmgr     unix  n       -       n       300     1       oqmgr
+						tlsmgr    unix  -       -       y       1000?   1       tlsmgr
+						rewrite   unix  -       -       y       -       -       trivial-rewrite
+						bounce    unix  -       -       y       -       0       bounce
+						defer     unix  -       -       y       -       0       bounce
+						trace     unix  -       -       y       -       0       bounce
+						verify    unix  -       -       y       -       1       verify
+						flush     unix  n       -       y       1000?   0       flush
+						proxymap  unix  -       -       n       -       -       proxymap
+						proxywrite unix -       -       n       -       1       proxymap
+						smtp      unix  -       -       y       -       -       smtp
+						relay     unix  -       -       y       -       -       smtp
+						        -o syslog_name=postfix/\$service_name
+						#       -o smtp_helo_timeout=5 -o smtp_connect_timeout=5
+						showq     unix  n       -       y       -       -       showq
+						error     unix  -       -       y       -       -       error
+						retry     unix  -       -       y       -       -       error
+						discard   unix  -       -       y       -       -       discard
+						local     unix  -       n       n       -       -       local
+						virtual   unix  -       n       n       -       -       virtual
+						lmtp      unix  -       -       y       -       -       lmtp
+						anvil     unix  -       -       y       -       1       anvil
+						scache    unix  -       -       y       -       1       scache
+						postlog   unix-dgram n  -       n       -       1       postlogd
+						#
+						# ====================================================================
+						# Interfaces to non-Postfix software. Be sure to examine the manual
+						# pages of the non-Postfix software to find out what options it wants.
+						#
+						# Many of the following services use the Postfix pipe(8) delivery
+						# agent.  See the pipe(8) man page for information about \${recipient}
+						# and other message envelope options.
+						# ====================================================================
+						#
+						# maildrop. See the Postfix MAILDROP_README file for details.
+						# Also specify in main.cf: maildrop_destination_recipient_limit=1
+						#
+						maildrop  unix  -       n       n       -       -       pipe
+						  flags=DRXhu user=vmail argv=/usr/bin/maildrop -d \${recipient}
+						#
+						# ====================================================================
+						#
+						# Recent Cyrus versions can use the existing "lmtp" master.cf entry.
+						#
+						# Specify in cyrus.conf:
+						#   lmtp    cmd="lmtpd -a" listen="localhost:lmtp" proto=tcp4
+						#
+						# Specify in main.cf one or more of the following:
+						#  mailbox_transport = lmtp:inet:localhost
+						#  virtual_transport = lmtp:inet:localhost
+						#
+						# ====================================================================
+						#
+						# Cyrus 2.1.5 (Amos Gouaux)
+						# Also specify in main.cf: cyrus_destination_recipient_limit=1
+						#
+						#cyrus     unix  -       n       n       -       -       pipe
+						#  flags=DRX user=cyrus argv=/cyrus/bin/deliver -e -r \${sender} -m \${extension} \${user}
+						#
+						# ====================================================================
+						# Old example of delivery via Cyrus.
+						#
+						#old-cyrus unix  -       n       n       -       -       pipe
+						#  flags=R user=cyrus argv=/cyrus/bin/deliver -e -m \${extension} \${user}
+						#
+						# ====================================================================
+						#
+						# See the Postfix UUCP_README file for configuration details.
+						#
+						uucp      unix  -       n       n       -       -       pipe
+						  flags=Fqhu user=uucp argv=uux -r -n -z -a\$sender - \$nexthop!rmail (\$recipient)
+						#
+						# Other external delivery methods.
+						#
+						ifmail    unix  -       n       n       -       -       pipe
+						  flags=F user=ftn argv=/usr/lib/ifmail/ifmail -r \$nexthop (\$recipient)
+						bsmtp     unix  -       n       n       -       -       pipe
+						  flags=Fq. user=bsmtp argv=/usr/lib/bsmtp/bsmtp -t\$nexthop -f\$sender \$recipient
+						scalemail-backend unix -       n       n       -       2       pipe
+						  flags=R user=scalemail argv=/usr/lib/scalemail/bin/scalemail-store \${nexthop} \${user} \${extension}
+						mailman   unix  -       n       n       -       -       pipe
+						  flags=FRX user=list argv=/usr/lib/mailman/bin/postfix-to-mailman.py \${nexthop} \${user}
+
+						# onionmx (https://github.com/ehloonion/onionmx/blob/master/postfix.md)
+						# FIXME: TLS is disabled due to the usage of tor, but we might want it
+						smtptor    unix  -       -       n       -       -      smtp_tor
+						    -o smtp_dns_support_level=disabled
+						    -o smtp_tls_security_level=none
+					EOF
+
+					cat <<-EOF > "$(postconf -h daemon_directory)/smtp_tor"
+						#!/bin/sh
+
+						/usr/bin/torsocks -i /usr/lib/postfix/smtp \$@
+					EOF
+
+					chmod +x "$(postconf -h daemon_directory)/smtp_tor" || die false "Unable to set executable permission on file '$(postconf -h daemon_directory)/smtp_tor'"
+
+					# Configure tor
+					cat <<-EOF > /etc/tor/torrc.d/hidden_mx
+						# This is a configuration from https://github.com/ehloonion/onionmx/blob/master/tor.md
+						HiddenServiceDir /var/lib/tor/hidden_mx
+						HiddenServicePort 25
+					EOF
+
+					unset funcname
+					return 0
 				;;
 				*) die fixme "Linux distribution '$DISTRO' with release '$RELEASE' is not implemented in function '$funcname'"
 			esac
