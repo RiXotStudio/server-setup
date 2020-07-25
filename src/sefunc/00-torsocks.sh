@@ -8,6 +8,8 @@
 # shellcheck disable=SC2039 # HOSTNAME is undefined in posix, but defined by our logic
 
 setup_torsocks() { funcname="setup_torsocks"
+	edebug 1 "Started $funcname setup function"
+
 	case "$KERNEL" in
 		"linux")
 			case "$DISTRO/$RELEASE" in
@@ -45,7 +47,8 @@ setup_torsocks() { funcname="setup_torsocks"
 						# Set Torsocks to accept inbound connections. If set to 1, listen() and
 						# accept() will be allowed to be used with non localhost address. (Default: 0)
 						# NOTICE(Krey): Required for onionMX, see sefunc/00-smtp.sh
-						AllowInbound 1
+						# NOTICE(Krey): OnionMX needs more research and is currently disabled
+						#AllowInbound 1
 
 						# Set Torsocks to allow outbound connections to the loopback interface.
 						# If set to 1, connect() will be allowed to be used to the loopback interface
@@ -60,6 +63,9 @@ setup_torsocks() { funcname="setup_torsocks"
 						# If set, the SOCKS5Username and SOCKS5Password options must not be set.
 						IsolatePID 0
 					EOF
+
+					unset funcname
+					return 0
 				;;
 			esac
 		;;

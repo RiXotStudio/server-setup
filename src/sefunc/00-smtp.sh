@@ -12,17 +12,27 @@
 ###! Privacy concerns
 ###! - [ ] it is not acceptable for ISP or anyone scanning the network to know that there is an encrypted SMTP/POP3/IMAP traffic going from server A to server B
 ###!  - SOLUTION: OnionMX
+###! - [ ] We are using Tor so Man-In-The-Middle attacks are a concern
 ###! CHECKLIST
 ###! - [ ] Reachable from clearweb
 ###! - [ ] Reachable from darkweb
 ###! - [ ] Disable non-encrypted ports
 ###! - [ ] PGP supported
+###! SECURITY-CHECKLIST:
+###! - [ ] Localhost doesn't have admin privileges (We are using Tor so that could make it exposed)
 ###! Relevant:
 ###! - MX delivery through onion https://github.com/ehloonion/onionmx
 
 # FIXME: Set up SRV record https://github.com/ehloonion/onionmx/blob/master/SRV.md
 
+# FIXME: should use a self signed cert with no other CA root available
+# NOTICE(Krey): Quotting "and if you really have enemies of such significance that you need to anonymize email traffic even though encrypted, you must stop trusting any of the public CAs"
+
+# NOTICE(Krey): OnionMX is currently disable because it needs more research
+
 setup_smtp() { funcname="setup_smtp"
+	edebug 1 "Started $funcname setup function"
+
 	# FIXME-QA(Krey): There should be a better implementation for this
 	domain="rixotstudio.cz"
 
@@ -30,8 +40,9 @@ setup_smtp() { funcname="setup_smtp"
 		"linux")
 			case "$DISTRO/$RELEASE" in
 				"devuan/chimaera")
+					efixme "Implement sanitization for function '$funcname'"
 					einfo "Installing SMTP handler 'postfix'"
-					elog "$(invoke_privileged "$APT_GET" install -y postfix || die false "Unable to install package 'postfix'")"
+					invoke_privileged "$APT_GET" install -y postfix || die false "Unable to install package 'postfix'"
 
 					# Configure
 					cat <<-EOF > /etc/postfix/main.cf
@@ -47,10 +58,10 @@ setup_smtp() { funcname="setup_smtp"
 						# TLS parameters
 						smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
 						smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
-						smtpd_tls_security_level=may
+						# NOTICE(Krey): Quotting: "because "may" is opportunistic and a tor mitm will just say "nope" so your encryption is gone"
+						smtpd_tls_security_level=secure
 
 						smtp_tls_CApath=/etc/ssl/certs
-						smtp_tls_security_level=may
 						smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
 
 						smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
@@ -155,14 +166,14 @@ setup_smtp() { funcname="setup_smtp"
 						# from gethostname(). \$myhostname is used as a default value for many
 						# other configuration parameters.
 						#
-						myhostname = $HOSTNAME.rixotstudio.cz
+						myhostname = $HOSTNAME.$domain
 
 						# The mydomain parameter specifies the local internet domain name.
 						# The default is to use \$myhostname minus the first component.
 						# \$mydomain is used as a default value for many other configuration
 						# parameters.
 						#
-						mydomain = rixotstudio.cz
+						mydomain = $domain
 
 						# SENDING MAIL
 						#
@@ -750,6 +761,11 @@ setup_smtp() { funcname="setup_smtp"
 						#              (yes)   (yes)   (no)    (never) (100)
 						# ==========================================================================
 						smtp      inet  n       -       y       -       -       smtpd
+						    # NOTICE(Krey): This is set on 'may', because we expect to cherrypick the recievers that support higher security through 'smtp_tls_policy_maps'
+						    -o smtp_tls_security_level=may
+						    -o smtp_tls_mandatory_ciphers=high
+								# NOTICE(Krey): Set on 1 to capture those that support encryption to be added in 'smtp_tls_policy_maps'
+						    -o smtp_tls_loglevel=1
 						#smtp      inet  n       -       y       -       1       postscreen
 						#smtpd     pass  -       -       y       -       -       smtpd
 						#dnsblog   unix  -       -       y       -       0       dnsblog
@@ -866,9 +882,12 @@ setup_smtp() { funcname="setup_smtp"
 
 						# onionmx (https://github.com/ehloonion/onionmx/blob/master/postfix.md)
 						# FIXME: TLS is disabled due to the usage of tor, but we might want it
-						smtptor    unix  -       -       n       -       -      smtp_tor
-						    -o smtp_dns_support_level=disabled
-						    -o smtp_tls_security_level=none
+						#smtptor    unix  -       -       n       -       -      smtp_tor
+						    #-o smtp_dns_support_level=disabled
+						    # NOTICE(Krey): Set to require encryption, because the headers on encrypted SMTP packat are in plain text and this forces them to be encrypted for when connection to entry and leaving exit nodes
+						    # NOTICE(Krey): Option 'encrypt' forces encryption which may be SSL (on old server), TLS (nowadays), or whatever else in the future, but refuses to deliver the email if the recipient doesn't support encryption
+						    #-o smtp_tls_mandatory_ciphers=high
+						    #-o smtp_tls_security_level=encrypt
 					EOF
 
 					cat <<-EOF > "$(postconf -h daemon_directory)/smtp_tor"
@@ -877,14 +896,16 @@ setup_smtp() { funcname="setup_smtp"
 						/usr/bin/torsocks -i /usr/lib/postfix/smtp \$@
 					EOF
 
-					chmod +x "$(postconf -h daemon_directory)/smtp_tor" || die false "Unable to set executable permission on file '$(postconf -h daemon_directory)/smtp_tor'"
+					# NOTICE(Krey): Currently disabled, because onionMX requires more research
+					# chmod +x "$(postconf -h daemon_directory)/smtp_tor" || die false "Unable to set executable permission on file '$(postconf -h daemon_directory)/smtp_tor'"
 
 					# Configure tor
-					cat <<-EOF > /etc/tor/torrc.d/hidden_mx
-						# This is a configuration from https://github.com/ehloonion/onionmx/blob/master/tor.md
-						HiddenServiceDir /var/lib/tor/hidden_mx
-						HiddenServicePort 25
-					EOF
+					# NOTICE(Krey): Currently disabled, because onionMX requires more research
+					# cat <<-EOF > /etc/tor/torrc.d/hidden_mx
+					# 	# This is a configuration from https://github.com/ehloonion/onionmx/blob/master/tor.md
+					# 	HiddenServiceDir /var/lib/tor/hidden_mx
+					# 	HiddenServicePort 25
+					# EOF
 
 					unset funcname
 					return 0

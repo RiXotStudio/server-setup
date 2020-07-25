@@ -8,7 +8,8 @@
 ###! Workflow made to configure bootloader on RiXotStudio's systems
 
 setup_bootloader() { funcname="setup_bootloader"
-	einfo "Configuring the bootloader"
+	edebug 1 "Started $funcname setup function"
+
 	case "$KERNEL" in
 		"linux")
 			case "$DISTRO/$RELEASE" in

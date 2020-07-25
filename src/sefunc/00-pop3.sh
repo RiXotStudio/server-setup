@@ -10,12 +10,17 @@
 ###! Workflow made to configure POP3 handler on RiXotStudio's systems
 ###! Security concerns:
 ###! - [ ] It is not acceptable for ISP and 3rd party scanning the network to know that encrypted POP3 is sent from server A to server B
+###! SECURITY-CHECKLIST:
+###! - [ ] Localhost doesn't have admin privileges (We are using tor so that could make it exposed)
 ###! Relevants
 ###! - Research: https://github.com/Kreyren/kreyren/issues/24
 
 # FIXME-SECURITY: Peer-review required
+# FIXME-SECURITY: Do not allow localhost to have admin privileges because we are using tor
 
 setup_pop3() { funcname="setup_pop3"
+	edebug 1 "Started $funcname setup function"
+
 	case "$KERNEL" in
 		"linux")
 

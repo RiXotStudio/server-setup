@@ -29,6 +29,10 @@ clean:
 
 #@ Clear cache
 clean-cache:
+	@ true \
+		&& printf '%s\n' "Do you wish to remove directory '$(cacheDir)/Zernit' ?" \
+		&& read -r confirmation \
+		&& [ "$$confirmation" = y -o "$$confirmation" = Y ] || exit 1
 	$(info Clearning cache directory at '$(cacheDir)')
 	@ [ ! -d "$(cacheDir)/Zernit" ] || rm -r "$(cacheDir)/Zernit"
 	$(info Cleared '$(cacheDir)/Zernit')
@@ -38,7 +42,7 @@ clean-cache:
 vendor: clean
 	$(info Fetching vendors..)
 	@ [ -d vendor ] || mkdir vendor
-	$(info Caching step requires cache directory)
+	$(info To lower the strain on github.com we are caching the vendors in '$(cachedir)', you may want to remove these later)
 	@ [ -d "$(cacheDir)/Zernit" ] || git clone https://github.com/RXT0112/Zernit.git "$(cacheDir)/Zernit" && printf '%s\n' "Vendor 'Zernit' has been cached in '$$HOME/.cache/Zernit'"
 	@ [ -d vendor/Zernit ] || cp -r "$(cacheDir)/Zernit" vendor/Zernit
 	$(info All vendors were fetched)
@@ -49,10 +53,10 @@ vendor: clean
 # FIXME-SUGGESTION: @ while IFS= read -r line; do case "$$line" in '#& APPEND '*) cat "$${line##'#& APPEND '}" ;; *) printf '%s\n' "$$line" ;; esac; done < src/bin/server-setup.sh > build/server-setup.sh
 # FIXME-QA: This creates additional 3 lines in between comment and '#% APPEND ...'
 # FIXME: Implement these in a way that doesn't mess with EOF
-	# && : "Remove comments" \
-	# && printf "g/#.*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
-	# && : "Remove blank lines" \
-	# && printf "s/^$/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+# && : "Remove comments" \
+# && printf "g/#.*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+# && : "Remove blank lines" \
+# && printf "s/^$/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
 #@ Build the script
 build: vendor
 	$(info Building..)
@@ -61,17 +65,28 @@ build: vendor
 	@ true \
 		&& printf 'INFO: %s\n' "Replacing '#& APPEND path' with requested code" \
 		&& grep "^#& APPEND.*" src/bin/server-setup.sh | while IFS= read -r string; do \
-			true \
-			&& printf '%s\n' "Processing $${string##*/} from appended" \
-			&& cp "$${string##\#& APPEND }" "vendor/$${string##*/}" \
-			&& : "Replace '#& APPEND ...' with content from the file" \
-			&& printf "/^#& APPEND $$(printf '%s\n' "$${string##\#& APPEND }" | sed "s#\/#\\\/#gm")/d\n-1r vendor/$${string##*/}\\nw\\nq\\n" | ed -s build/server-setup.sh\;\
+				true \
+				&& printf '%s\n' "Processing $${string##*/} from appended" \
+				&& cp "$${string##\#& APPEND }" "vendor/$${string##*/}" \
+				&& : "Remove shebang from appended code" \
+				&& printf "g/^#!\/.*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+				&& : "Remove documentation comments from appended code" \
+				&& printf "g/###! .*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+				&& : "Remove shellcheck directives from appended code" \
+				&& printf "g/# shellcheck .*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+				&& : "Remove comments from appended code" \
+				&& printf "g/^# .*/d\nw\nq\n" | ed -s "vendor/$${string##*/}" \
+				&& : "Remove the first three blank lines if they are present (mostly they are)" \
+				&& printf "1;/./-d\\nw\\nq\\n" | ed -s "vendor/$${string##*/}" \
+				&& : "Replace '#& APPEND ...' with content from the file" \
+				&& printf "/^#& APPEND $$(printf '%s\n' "$${string##\#& APPEND }" | sed "s#\/#\\\/#gm")/d\n-1r vendor/$${string##*/}\\nw\\nq\\n" | ed -s build/server-setup.sh\
+				&& printf '%s\n' "File '$$string' has been processed";\
 			done \
-		&& printf 'INFO: %s\n' "Replaced all mensioning of '#& APPEND path' with requested code"
+		&& printf '%s\n' "Replaced all mensioning of '#& APPEND path' with requested code"
 	@ true \
-		&& printf 'INFO: %s\n' "Removing tag 'BUILD-CHECK' allowing the script to run" \
+		&& printf '%s\n' "Removing tag 'BUILD-CHECK' allowing the script to run" \
 		&& printf '/^#& BUILD-CHECK/d\nd\nw\nq\n' | ed -s build/server-setup.sh \
-		&& printf 'INFO: %s\n' "tag 'BUILD-CHECK' and it's relevant code has been removed"
+		&& printf '%s\n' "tag 'BUILD-CHECK' and it's relevant code has been removed"
 	$(info Build phase finished)
 
 #@ Format the built result to be more storage efficient

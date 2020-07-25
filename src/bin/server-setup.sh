@@ -7,9 +7,11 @@ printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make 
 # shellcheck shell=sh # Written to be POSIX-comatible
 # shellcheck source=src/sefunc/00-bootloader.sh
 # shellcheck source=src/sefunc/00-kernel.sh
+# shellcheck source=src/sefunc/00-pop3.sh
 # shellcheck source=src/sefunc/00-smtp.sh
 # shellcheck source=src/sefunc/00-sshd.sh
 # shellcheck source=src/sefunc/00-tor.sh
+# shellcheck disable=SC2059 # Don't use variables in format stings -> NOt possible here since we are appending a format string in a variable
 
 ###! Administrative script to configure target system to RiXotStudio's standard and expected functionality
 ###! Requires:
@@ -43,11 +45,13 @@ printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make 
 
 # Upstream info
 UPSTREAM="https://github.com/RiXotStudio/server-setup"
-# shellcheck disable=SC2034 # UPSTREAM_NAME is not used, remove disable directive when used
+# shellcheck disable=SC2034 # not used, remove disable directive when used
 UPSTREAM_NAME="RiXotStudio"
 # shellcheck disable=SC2034 # not used, remove disable directive when used
 UPSTREAM_EMAIL="info@rixotstudio.cz"
+
 # Maintainer info
+# shellcheck disable=SC2034 # not used, remove disable directive when used
 MAINTAINER_EMAIL="kreyren@rixotstudio.cz"
 MAINTAINER_REPOSITORY="https://github.com/RiXotStudio/server-setup"
 MAINTAINER_NICKNAME="kreyren"
@@ -62,10 +66,11 @@ MAINTAINER_PUBKEY="765AED304211C28410D5C478FCBA0482B0AB9F10"
 myName="${0##*/}"
 
 # Used to prefix logs with timestemps, uses ISO 8601 by default
-logPrefix="[ $(date -u +"%Y-%m-%dT%H:%M:%SZ") ] "
+genTime() {	date -u +"%Y-%m-%dT%H:%M:%SZ" ;}
+logPrefix="[ $(genTime) ] "
 # Path to which we will save logs
 # NOTICE(Krey): To avoid storing file '$HOME/.some-name.sh.log' we are stripping the '.sh' here
-logPath="${XDG_DATA_HOME:-$HOME/.local/share}/${myName%%.sh}.log"
+logPath="${XDG_DATA_HOME:-$HOME/}/${myName%%.sh}.log"
 
 # FIXME: _=${var:="some text"} is less verbose and less error prone than [ -z "$var" ] && var="some text"
 
@@ -85,6 +90,7 @@ logPath="${XDG_DATA_HOME:-$HOME/.local/share}/${myName%%.sh}.log"
 [ -z "$APT_GET" ] && APT_GET="apt-get"
 [ -z "$ID" ] && ID="id"
 [ -z "$MKDIR" ] && MKDIR="mkdir"
+[ -z "$LSB_RELEASE" ] && LSB_RELEASE="lsb_release"
 
 # Customization of the output
 ## efixme
@@ -95,52 +101,61 @@ logPath="${XDG_DATA_HOME:-$HOME/.local/share}/${myName%%.sh}.log"
 ## eerror
 [ -z "$EERROR_FORMAT_STRING" ] && EERROR_FORMAT_STRING="ERROR: %s\n"
 [ -z "$EERROR_FORMAT_STRING_LOG" ] && EERROR_FORMAT_STRING_LOG="${logPrefix}ERROR: %s\n"
-[ -z "$EERROR_FORMAT_STRING_DEBUG" ] && EERROR_FORMAT_STRING_DEBUG="ERROR($myName:$0): %s\n"
-[ -z "$EERROR_FORMAT_STRING_DEBUG_LOG" ] && EERROR_FORMAT_STRING_DEBUG_LOG="${logPrefix}ERROR($myName:$0): %s\n"
+[ -z "$EERROR_FORMAT_STRING_DEBUG" ] && EERROR_FORMAT_STRING_DEBUG="ERROR($myName:$LINENO): %s\n"
+[ -z "$EERROR_FORMAT_STRING_DEBUG_LOG" ] && EERROR_FORMAT_STRING_DEBUG_LOG="${logPrefix}ERROR($myName:$LINENO): %s\n"
 ## edebug
 [ -z "$EERROR_FORMAT_STRING" ] && EERROR_FORMAT_STRING="ERROR: %s\n"
 [ -z "$EERROR_FORMAT_STRING_LOG" ] && EERROR_FORMAT_STRING_LOG="${logPrefix}ERROR: %s\n"
-[ -z "$EERROR_FORMAT_STRING_DEBUG" ] && EERROR_FORMAT_STRING_DEBUG="ERROR($myName:$0): %s\n"
-[ -z "$EERROR_FORMAT_STRING_DEBUG_LOG" ] && EERROR_FORMAT_STRING_DEBUG_LOG="${logPrefix}ERROR($myName:$0): %s\n"
+[ -z "$EERROR_FORMAT_STRING_DEBUG" ] && EERROR_FORMAT_STRING_DEBUG="ERROR($myName:$LINENO): %s\n"
+[ -z "$EERROR_FORMAT_STRING_DEBUG_LOG" ] && EERROR_FORMAT_STRING_DEBUG_LOG="${logPrefix}ERROR($myName:$LINENO): %s\n"
 ## einfo
 [ -z "$EINFO_FORMAT_STRING" ] && EINFO_FORMAT_STRING="INFO: %s\n"
 [ -z "$EINFO_FORMAT_STRING_LOG" ] && EINFO_FORMAT_STRING_LOG="${logPrefix}INFO: %s\n"
-[ -z "$EINFO_FORMAT_STRING_DEBUG" ] && EINFO_FORMAT_STRING_DEBUG="INFO($myName:$0): %s\n"
-[ -z "$EINFO_FORMAT_STRING_DEBUG_LOG" ] && EINFO_FORMAT_STRING_DEBUG_LOG="${logPrefix}INFO($myName:$0): %s\n"
+[ -z "$EINFO_FORMAT_STRING_DEBUG" ] && EINFO_FORMAT_STRING_DEBUG="INFO($myName:$LINENO): %s\n"
+[ -z "$EINFO_FORMAT_STRING_DEBUG_LOG" ] && EINFO_FORMAT_STRING_DEBUG_LOG="${logPrefix}INFO($myName:$LINENO): %s\n"
 ## die
 ### Generic
 [ -z "$DIE_FORMAT_STRING" ] && DIE_FORMAT_STRING="FATAL: %s in script '$myName' located at '$0'\\n"
 [ -z "$DIE_FORMAT_STRING_LOG" ] && DIE_FORMAT_STRING_LOG="${logPath}FATAL: %s in script '$myName' located at '$0'\\n"
-[ -z "$DIE_FORMAT_STRING_DEBUG" ] && DIE_FORMAT_STRING_DEBUG="FATAL($myName:$1): %s\n"
-[ -z "$DIE_FORMAT_STRING_DEBUG_LOG" ] && DIE_FORMAT_STRING_DEBUG_LOG="${logPrefix}FATAL($myName:$1): %s\\n"
+[ -z "$DIE_FORMAT_STRING_DEBUG" ] && DIE_FORMAT_STRING_DEBUG="FATAL($myName:$LINENO): %s\n"
+[ -z "$DIE_FORMAT_STRING_DEBUG_LOG" ] && DIE_FORMAT_STRING_DEBUG_LOG="${logPrefix}FATAL($myName:$LINENO): %s\\n"
 ### Success trap
-# FIXME: Implement logic
-[ -z "$DIE_FORMAT_STRING_SUCCESS" ] && DIE_FORMAT_STRING_SUCCESS="FATAL: %s in script '$myName' located at '$0'\\n"
-[ -z "$DIE_FORMAT_STRING_LOG" ] && DIE_FORMAT_STRING_LOG="${logPath}FATAL: %s in script '$myName' located at '$0'\\n"
-[ -z "$DIE_FORMAT_STRING_DEBUG" ] && DIE_FORMAT_STRING_DEBUG="FATAL($myName:$1): %s\n"
-[ -z "$DIE_FORMAT_STRING_DEBUG_LOG" ] && DIE_FORMAT_STRING_DEBUG_LOG="${logPrefix}FATAL($myName:$1): %s\\n"
+[ -z "$DIE_FORMAT_STRING_SUCCESS" ] && DIE_FORMAT_STRING_SUCCESS="SUCCESS: Script '$myName' located at '$0' finished successfully\\n"
+[ -z "$DIE_FORMAT_STRING_LOG" ] && DIE_FORMAT_STRING_LOG="${logPath}$DIE_FORMAT_STRING_SUCCESS"
+[ -z "$DIE_FORMAT_STRING_DEBUG" ] && DIE_FORMAT_STRING_DEBUG="SUCCESS($myName:$LINENO): Script '$myName' located at '$0' finished successfully\\n"
+[ -z "$DIE_FORMAT_STRING_DEBUG_LOG" ] && DIE_FORMAT_STRING_DEBUG_LOG="${logPrefix}$DIE_FORMAT_STRING_DEBUG_LOG"
+### Syntax error (syntaxerr) trap
+[ -z "$DIE_FORMAT_STRING_SYNTAXERR" ] && DIE_FORMAT_STRING_SYNTAXERR="SyntaxErr: Invalid argument(s) '$0' '$1' '$2' '$3' '$4' has been provided to $myName\\n"
+[ -z "$DIE_FORMAT_STRING_SYNTAXERR_LOG" ] && DIE_FORMAT_STRING_LOG="${logPath}$DIE_FORMAT_STRING_SUCCESS"
+[ -z "$DIE_FORMAT_STRING_SYNTAXERR_DEBUG" ] && DIE_FORMAT_STRING_DEBUG="SyntaxErr($myName:$LINENO): Invalid argument(s) '$0' '$1' '$2' '$3' '$4' has been provided to $myName\\n"
+[ -z "$DIE_FORMAT_STRING_SYNTAXERR_DEBUG_LOG" ] && DIE_FORMAT_STRING_DEBUG_LOG="${logPrefix}$DIE_FORMAT_STRING_DEBUG_LOG"
 ### Fixme trap
 [ -z "$DIE_FORMAT_STRING_FIXME" ] && DIE_FORMAT_STRING_FIXME="FATAL: %s in script '$myName' located at '$0', fixme?\n"
 [ -z "$DIE_FORMAT_STRING_FIXME_LOG" ] && DIE_FORMAT_STRING_FIXME_LOG="${logPrefix}FATAL: %s, fixme?\n"
-[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG" ] && DIE_FORMAT_STRING_FIXME_DEBUG="FATAL($myName:$1): %s, fixme?\n"
-[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG_LOG" ] && DIE_FORMAT_STRING_FIXME_DEBUG_LOG="${logPrefix}FATAL($myName:$1): %s, fixme?\\n"
+[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG" ] && DIE_FORMAT_STRING_FIXME_DEBUG="FATAL($myName:$LINENO): %s, fixme?\n"
+[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG_LOG" ] && DIE_FORMAT_STRING_FIXME_DEBUG_LOG="${logPrefix}FATAL($myName:$LINENO): %s, fixme?\\n"
 ### Bug Trap
-[ -z "$DIE_FORMAT_STRING_BUG" ] && DIE_FORMAT_STRING_BUG="BUG: Unexpected happend while processing %s in script '$myName' located at '$0'\\n\\nIf you think that this is a bug, the report it to $UPSTREAM to @$MAINTAINER_NICKNAME with output from $logPath for relevant runtime or through e-mail on $MAINTAINER_EMAIL"
+[ -z "$DIE_FORMAT_STRING_BUG" ] && DIE_FORMAT_STRING_BUG="BUG: Unexpected happend while processing %s in script '$myName' located at '$0'\\n\\nIf you think that this is a bug, the report it to $UPSTREAM to @$MAINTAINER_NICKNAME with output from $logPath for relevant runtime"
 [ -z "$DIE_FORMAT_STRING_BUG_LOG" ] && DIE_FORMAT_STRING_BUG_LOG="${logPrefix}$DIE_FORMAT_STRING_BUG"
-[ -z "$DIE_FORMAT_STRING_BUG_DEBUG" ] && DIE_FORMAT_STRING_BUG_DEBUG="BUG:($myName:$1): ${DIE_FORMAT_STRING_BUG%%BUG:}"
+[ -z "$DIE_FORMAT_STRING_BUG_DEBUG" ] && DIE_FORMAT_STRING_BUG_DEBUG="BUG:($myName:$LINENO): ${DIE_FORMAT_STRING_BUG%%BUG:}"
 [ -z "$DIE_FORMAT_STRING_BUG_DEBUG_LOG" ] && DIE_FORMAT_STRING_BUG_DEBUG_LOG="${logPrefix}$DIE_FORMAT_STRING_BUG_DEBUG"
 ### Fixme trap
 [ -z "$DIE_FORMAT_STRING_FIXME" ] && DIE_FORMAT_STRING_FIXME="FATAL: %s in script '$myName' located at '$0', fixme?\n"
 [ -z "$DIE_FORMAT_STRING_FIXME_LOG" ] && DIE_FORMAT_STRING_FIXME_LOG="${logPrefix}FATAL: %s, fixme?\n"
-[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG" ] && DIE_FORMAT_STRING_FIXME_DEBUG="FATAL($myName:$1): %s, fixme?\n"
-[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG_LOG" ] && DIE_FORMAT_STRING_FIXME_DEBUG_LOG="${logPrefix}FATAL($myName:$1): %s, fixme?\\n"
+[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG" ] && DIE_FORMAT_STRING_FIXME_DEBUG="FATAL($myName:$LINENO): %s, fixme?\n"
+[ -z "$DIE_FORMAT_STRING_FIXME_DEBUG_LOG" ] && DIE_FORMAT_STRING_FIXME_DEBUG_LOG="${logPrefix}FATAL($myName:$LINENO): %s, fixme?\\n"
 ### Unexpected trap
 [ -z "$DIE_FORMAT_STRING_UNEXPECTED" ] && DIE_FORMAT_STRING_UNEXPECTED="FATAL: Unexpected happend while %s in $myName located at $0\\n"
 [ -z "$DIE_FORMAT_STRING_UNEXPECTED_LOG" ] && DIE_FORMAT_STRING_UNEXPECTED_LOG="${logPrefix}FATAL: Unexpected happend while %s\\n"
-[ -z "$DIE_FORMAT_STRING_UNEXPECTED_DEBUG" ] && DIE_FORMAT_STRING_UNEXPECTED_DEBUG="FATAL($myName:$1): Unexpected happend while %s in $myName located at $0\\n"
-[ -z "$DIE_FORMAT_STRING_UNEXPECTED_DEBUG_LOG" ] && DIE_FORMAT_STRING_UNEXPECTED_DEBUG="${logPrefix}FATAL($myName:$1): Unexpected happend while %s\\n"
+[ -z "$DIE_FORMAT_STRING_UNEXPECTED_DEBUG" ] && DIE_FORMAT_STRING_UNEXPECTED_DEBUG="FATAL($myName:$LINENO): Unexpected happend while %s in $myName located at $0\\n"
+[ -z "$DIE_FORMAT_STRING_UNEXPECTED_DEBUG_LOG" ] && DIE_FORMAT_STRING_UNEXPECTED_DEBUG="${logPrefix}FATAL($myName:$LINENO): Unexpected happend while %s\\n"
 # elog
 [ -z "$ELOG_FORMAT_STRING_DEBUG_LOG" ] && ELOG_FORMAT_STRING_DEBUG_LOG="${logPrefix}LOG: %s\\n"
+# ebench
+[ -z "$EBENCH_FORMAT_STRING_START" ] && EBENCH_FORMAT_STRING_START="BENCHMARK: Starting benchmark for action %s\n"
+[ -z "$EBENCH_FORMAT_STRING_RESULT" ] && EBENCH_FORMAT_STRING_RESULT="BENCHMARK: Action %s took $SECONDS seconds\n"
+# invoke_privileged
+[ -z "$INVOKE_PRIVILEGED_FORMAT_STRING_QUESTION" ] && INVOKE_PRIVILEGED_FORMAT_STRING_QUESTION="### PRIVILEGED ACCESS REQUEST ###\n\n\s\n"
 
 # Exit on anything unexpected
 set -e
@@ -150,9 +165,15 @@ set -e
 # inicialize the script in logs
 "$PRINTF" '%s\n' "Started $myName on $("$UNAME" -s) at $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$logPath"
 
+# Function to output fixme messages for unimplemented/expected features that doesn't prevent runtime
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/efixme.sh
+
 # These are appended from https://github.com/RXT0112/Zernit/tree/master/src/RXT0112-1/downstream-classes/zeres-0/bash/output
 # Fatal output handling with method to specify exit code and show helpful message for the end-user and in logs
 #& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/die.sh
+
+# Function to output error message
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/einfo.sh
 
 # Function to show warning message for the end-user and in logs
 #& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/ewarn.sh
@@ -163,14 +184,20 @@ set -e
 # Function to output error message
 #& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/eerror.sh
 
-# Function to output fixme messages for unimplemented/expected features that doesn't prevent runtime
-#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/efixme.sh
-
 # Function to relay an output in logs
 #& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/elog.sh
 
 # Function to perform benchmarks in specified parts of the code
 #& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/output/ebench.sh
+
+# Function to invoke commands as privileged user with method to ensure that it's not abused
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/wrappers/invoke_privileged.sh
+
+# Function to return executability of a command
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/wrappers/cmd_check.sh
+
+# Function to sanitize creation of a directory
+#& APPEND vendor/Zernit/src/RXT0112-1/downstream-classes/zeres-0/bash/wrappers/emkdir.sh
 
 # Identify system
 if command -v "$UNAME" 1>/dev/null; then
@@ -254,6 +281,8 @@ fi
 
 #& APPEND src/sefunc/00-kernel.sh
 
+#& APPEND src/sefunc/00-pop3.sh
+
 #& APPEND src/sefunc/00-tor.sh
 
 #& APPEND src/sefunc/00-torsocks.sh
@@ -290,15 +319,19 @@ while [ "$#" -gt 0 ]; do case "$1" in
 		efixme "Implement a cron job to automatically update the system"
 		efixme "Set up mailserver to inform administrators about vulnerabilities"
 
+		# DNM: This is hotfix because devuan is incompetent
+		# NOTICE(Krey): Fixed waiting to be merged
+		RELEASE="chimaera"
+
 		# Configure the system to run tor in package manager if supported
 		case "$KERNEL" in
 			"linux")
 				case "$DISTRO/$RELEASE" in
 					"devuan/chimaera")
 						# On apt-based distributions we need 'apt-transport-tor' package so that the package manager knows how to use tor
-						if "$APT" list --installed apt-transport-tor; then
+						if "$APT" list --installed apt-transport-tor >/dev/null 2>&1; then
 							edebug 1 "Package 'apt-transport-tor' is already installed on $DISTRO/$RELEASE"
-						elif ! "$APT" list --installed apt-transport-tor; then
+						elif ! "$APT" list --installed apt-transport-tor >/dev/null 2>&1; then
 							einfo "Installing package 'apt-transport-tor' to allow piping the apt trafic though Tor"
 							efixme "Do not perform changes to /etc/apt/sources.list if they are not needed"
 							invoke_privileged cat <<-EOF > /etc/apt/sources.list
@@ -308,10 +341,10 @@ while [ "$#" -gt 0 ]; do case "$1" in
 							efixme "Do not perform repository update if it's not needed"
 							efixme "In case the command fails it doesn't show the output?"
 							elog "Updating apt repositories"
-							elog "$(invoke_privileged "$APT_GET" update -q || die false "Unable to update sources")"
+							invoke_privileged "$APT_GET" update -q || die false "Unable to update sources"
 
 							elog "Installing package apt-transport-tor"
-							elog "$(invoke_privileged "$APT_GET" install apt-transport-tor -y || die false "Unable to install package 'apt-transport-tor'")"
+							invoke_privileged "$APT_GET" install apt-transport-tor -y || die false "Unable to install package 'apt-transport-tor'"
 
 							# Make sure that tor is really installed in case apt-transport-tor changed
 							if cmd_check tor; then
@@ -343,7 +376,7 @@ while [ "$#" -gt 0 ]; do case "$1" in
 							deb-src [arch=amd64,i386] tor+http://devuanfwojg73k6r.onion/merged chimaera main contrib non-free
 						EOF
 
-						elog "$(invoke_privileged "$APT_GET" update || die false "Unable to update repositories for tor usage")"
+						invoke_privileged "$APT_GET" update || die false "Unable to update repositories for tor usage"
 					;;
 					*) die fixme "Linux distribution '$DISTRO' with release '$RELEASE' is not implemented to configure the system to use tor"
 				esac
@@ -353,6 +386,9 @@ while [ "$#" -gt 0 ]; do case "$1" in
 
 		# Set up tor
 		setup_tor
+
+		# Maintainer-specific workflow
+		setup_maintainer
 
 		# Configuration torsocks
 		setup_torsocks
@@ -376,6 +412,10 @@ while [ "$#" -gt 0 ]; do case "$1" in
 
 		# Configure IMAP provider
 		#setup_imap
+
+		# FIXME: Setup cron
+
+		die true "Step '$1' finished in $myName"
 	;;
 	"setup-tor")
 		setup_tor
@@ -404,7 +444,7 @@ while [ "$#" -gt 0 ]; do case "$1" in
 		die true
 	;;
 	*)
-		die 2 "FIXME_MESSAGE"
+		die syntaxerr "FIXME_MESSAGE"
 	;;
 esac; done
 

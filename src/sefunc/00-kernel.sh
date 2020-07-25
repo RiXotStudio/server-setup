@@ -8,8 +8,9 @@
 ###! Workflow made to configure kernel on RiXotStudio's systems
 
 setup_kernel() { funcname="setup_kernel"
+	edebug 1 "Started $funcname setup function"
+
 	# NOTICE(Krey): Currently we need a kernel optimized for our workload, using Liquorix as fast fix
-	einfo "Configuring kernel"
 	case "$KERNEL" in
 		"linux")
 			case "$DISTRO/$RELEASE" in
@@ -21,7 +22,7 @@ setup_kernel() { funcname="setup_kernel"
 
 					elog "Installing liquorix kernel dependencies"
 					efixme "Sanitize installation of liquorix dependencies"
-					elog "$(invoke_privileged "$APT_GET" install -y linux-image-liquorix-amd64 linux-headers-liquorix-amd64 grub2)"
+					invoke_privileged "$APT_GET" install -y linux-image-liquorix-amd64 linux-headers-liquorix-amd64 grub2 || die false "Unable to install liquorix dependencies"
 
 					unset funcname
 					return 0
