@@ -1,9 +1,8 @@
 #!/bin/false
-# - Used only for sourcing
-# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
-
 # shellcheck shell=sh # Written to be POSIX-compatible
-# shellcheck source=src/bin/server-setup.sh
+# shellcheck source=src/bin/00-server-setup.sh
+
+# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 
 ###! Workflow made to configure kernel on RiXotStudio's systems
 
@@ -18,7 +17,7 @@ setup_kernel() { funcname="setup_kernel"
 					ewarn "Usage of liquorix kernel is a fast fix, custom compilation of linux kernel is preferrable"
 					einfo "Installing liquorix kernel"
 					efixme "Sanitize liquorix pubkey configuration"
-					curl 'https://liquorix.net/linux-liquorix.pub' | invoke_privileged apt-key add -
+					#curl 'https://liquorix.net/linux-liquorix.pub' | invoke_privileged apt-key add -
 
 					elog "Installing liquorix kernel dependencies"
 					efixme "Sanitize installation of liquorix dependencies"

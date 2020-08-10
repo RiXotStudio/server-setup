@@ -1,9 +1,8 @@
 #!/bin/false
-# - Used only for sourcing
-# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
-
 # shellcheck shell=sh # Written to be POSIX-compatible
-# shellcheck source=src/bin/server-setup.sh
+# shellcheck source=src/bin/00-server-setup.sh
+
+# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 
 ###! Workflow made to configure SSH Daemon on RiXotStudio's systems
 ###! Relevants
@@ -23,18 +22,23 @@ setup_sshd() { funcname="setup_sshd"
 					# Relevant: Manpage for sshd_config (https://www.man7.org/linux/man-pages/man5/ssh_config.5.html)
 					# Relevant: DigitalOcean community reference (https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server)
 					# FIXME-Suggestion: You might also want to tweak and play with ClientAliveCountMax if it's a tor hidden service, that way you can prevent disconnects with lag spikes, Same with ClientAliveInterval MaxStartups,
+					# NOTICE(Krey): Changes in sshd_config are immediate and so there is no need to restart the service
 					cat <<-EOF > /etc/ssh/sshd_config
 						### SECURITY CHECKLIST
 						## - [X] Use standard port 22 for SSH
 						Port 22
 
-						## - [X] Disable root login
-						PermitRootLogin no
+						## - [X] Require pubkey and then password authentication
+						AuthenticationMethods publickey,password
+
+						## - [ ] Disable root login
+						# FIXME-SECURITY(Krey): Brainstorm since we are using $UPSTREAM_REPOSITORY for deployment
+						PermitRootLogin yes
 
 						## - [X] Require publickey authentification
 						PubkeyAuthentication yes
-						# Allow only ssh-rsa since that's what privileged users are using
-						PubkeyAcceptedKeyTypes ssh-rsa
+						# SECURITY-WARNING: Do not use 'ssh-rsa' since that is using md5sum to verify the signature which is insecure!
+						PubkeyAcceptedKeyTypes rsa-sha2-512
 						# FIXME-SECURITY: There are methods that may require multiple layers of authentification -> Investigate
 						# FIXME: Invalid
 						#AuthentificationMethods publickey
@@ -42,10 +46,7 @@ setup_sshd() { funcname="setup_sshd"
 						# FIXME: Invalid
 						#PreferredAuthentications publickey
 
-						## - [X] Disable password authentification
-						PasswordAuthentication no
-
-						## - [X] Do not allow empty passwords
+						## - [ ] Do not allow empty passwords
 						# FIXME: Invalid
 						#PermitEmptyPassowrds no
 
@@ -74,6 +75,9 @@ setup_sshd() { funcname="setup_sshd"
 
 						## - [ ] Check integrity of critical files using checksum
 						# FIXME: Needs to be implemented
+
+						# Logging
+						# FIXME
 					EOF
 
 					# Create SSH dir
@@ -81,8 +85,14 @@ setup_sshd() { funcname="setup_sshd"
 
 					# Allow privileged people to have access in the server
 					# FIXME-SECURITY: Ensure that their private key is encrypted with password
+					# FIXME: Allow configuration on demand
 					invoke_privileged cat <<-EOF > "/home/$MAINTAINER_NICKNAME/.ssh/authorized_keys"
-						$(maintainer_ssh_access)
+						ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQClDp9OKjyYJnrmxBbHST20P5Yko9/1w3rz/haco23K5KcSSxaJ/hY/NDwoydtSqB/JoYDY0nSQd4qtxuuEhMshqmUHhHacTgvXmWApI/Rp
+un8ap5KFZjvbIuX/J7Mgpou5CLDQodG/93HWp8Bq6+DDsEfiUapyxDullnCr//SNUv7eHgiSmkbpRQetG+RvE7IHGP6QCYF5MBVwVkBjnzN+Xt+iWQ+JL+ZhuLh0WC3W7uNxMLzzAr5fKVUJ
+cpzwPSd8PmaEko83pQAUXFcI4BJL3IXpvAbJhAPpPaZcbHYxsj+1ypLBBJaLHDiSlmbFw0qCOW937nT/7p1HYw7ImXMKwjC7DxgKz8rfAQoCKkDTu1fkOe15ZtrCZCJL2IjXBryuFh4A9DTo
+nU+bFplX1J6hW9WZQS8oQGQ1p1kM6WYy5b1CpMrJTKAJkJQXczrzJRf3ivVevyO4EDNXILVZ4SYWmaQsD6t8vYagTQVkzZyrx3ZznCjYITGMXGAIRj+NAl8JvOcs8LrxcJzRni38iqVM+Iht
+St5UWYl5jhUv+FVhUFnzCsidI5HePA2LpjJ7GQ1H3gEqoQCuKifOLfEj7IU0UXelXXhkeNB38/mvyl97W0yHEItLJNi5Fle26jB3BVJd5s1Rbm5DBqwHKTI9A5Ul6DEahJm8g9NWWjfhslhv
+xw== kreyren@rixotstudio.cz
 					EOF
 
 					# Make sure that tor is set up to read from torrc.d/sshd

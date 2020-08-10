@@ -1,17 +1,19 @@
 #!/bin/sh
-# Created by Jacob Hrbek <kreyren@rixotstudio.cz> under GPLv3 license <https://www.gnu.org/licenses/gpl-3.0.en.html> in 13.07.2020 12:02:48 CEST
+# shellcheck shell=sh # Written to be POSIX-compatible
+# shellcheck source=src/sefunc/00-bootloader.sh
+# shellcheck source=src/sefunc/00-certbot.sh
+# shellcheck source=src/sefunc/00-kernel.sh
+# shellcheck source=src/sefunc/00-dovecot.sh
+# shellcheck source=src/sefunc/00-postfix.sh
+# shellcheck source=src/sefunc/00-sshd.sh
+# shellcheck source=src/sefunc/00-tor.sh
+# shellcheck disable=SC2059 # Krey: Don't use variables in format stings -> NOt possible here since we are appending a format string in a variable
+# shellcheck disable=SC2034 # FIXME: Shellcheck doesn't follow our source files, this is just to silence it
+
+# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 
 #& BUILD-CHECK
 printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make build' and reinvoke the script from build directory"; exit 88
-
-# shellcheck shell=sh # Written to be POSIX-comatible
-# shellcheck source=src/sefunc/00-bootloader.sh
-# shellcheck source=src/sefunc/00-kernel.sh
-# shellcheck source=src/sefunc/00-pop3.sh
-# shellcheck source=src/sefunc/00-smtp.sh
-# shellcheck source=src/sefunc/00-sshd.sh
-# shellcheck source=src/sefunc/00-tor.sh
-# shellcheck disable=SC2059 # Don't use variables in format stings -> NOt possible here since we are appending a format string in a variable
 
 ###! Administrative script to configure target system to RiXotStudio's standard and expected functionality
 ###! Requires:
@@ -24,6 +26,7 @@ printf 'NOT_BUILT: %s\n' "This script is not built, refusing to run - Use 'make 
 ###! - [ ] Linux
 ###!  - [ ] Debian
 ###!  - [ ] Devuan
+###!  - [ ] Gentoo
 ###!  - [ ] Ubuntu
 ###!  - [ ] Fedora
 ###!  - [ ] NixOS
@@ -63,7 +66,16 @@ MAINTAINER_SURNAME="Hrbek"
 MAINTAINER_PUBKEY="765AED304211C28410D5C478FCBA0482B0AB9F10"
 
 # NOTICE(Krey): By default busybox outputs a full path in '$0' this is used to strip it
-myName="${0##*/}"
+if [ "$0" != "$SHELL" ]; then
+	myName="${0##*/}"
+elif [ "$0" = "$SHELL" ]; then
+	# FIXME: Implement logic for myName
+	myName="server-setup.sh"
+else
+	# DNM
+	echo "boop"
+	exit 255
+fi
 
 # Used to prefix logs with timestemps, uses ISO 8601 by default
 genTime() {	date -u +"%Y-%m-%dT%H:%M:%SZ" ;}
@@ -78,8 +90,10 @@ logPath="${XDG_DATA_HOME:-$HOME/}/${myName%%.sh}.log"
 [ -z "$PRINTF" ] && PRINTF="printf"
 [ -z "$WGET" ] && WGET="wget"
 [ -z "$CURL" ] && CURL="curl"
+[ -z "$CAT" ] && CAT="cat"
 [ -z "$ARIA2C" ] && ARIA2C="aria2c"
 [ -z "$CHMOD" ] && CHMOD="chmod"
+[ -z "$CHOWN" ] && CHOWN="chown"
 [ -z "$UNAME" ] && UNAME="uname"
 [ -z "$TR" ] && TR="tr"
 [ -z "$SED" ] && SED="sed"
@@ -91,6 +105,7 @@ logPath="${XDG_DATA_HOME:-$HOME/}/${myName%%.sh}.log"
 [ -z "$ID" ] && ID="id"
 [ -z "$MKDIR" ] && MKDIR="mkdir"
 [ -z "$LSB_RELEASE" ] && LSB_RELEASE="lsb_release"
+[ -z "$EMERGE" ] && EMERGE="emerge"
 
 # Customization of the output
 ## efixme
@@ -235,7 +250,7 @@ if command -v "$UNAME" 1>/dev/null; then
 
 			# Verify Linux Distro Release
 			efixme "Sanitize verification of linux distro release"
-			assumedRelease="$RELEASE"
+			RELEASE="$assumedRelease"
 		;;
 		FreeBSD | Redox | Darwin | Windows)
 			KERNEL="$unameKernel"
@@ -279,17 +294,23 @@ fi
 
 #& APPEND src/sefunc/00-bootloader.sh
 
-#& APPEND src/sefunc/00-kernel.sh
+#& APPEND src/sefunc/00-certbot.sh
 
-#& APPEND src/sefunc/00-pop3.sh
+#& APPEND src/sefunc/00-cron.sh
+
+#& APPEND src/sefunc/00-sshd.sh
 
 #& APPEND src/sefunc/00-tor.sh
 
 #& APPEND src/sefunc/00-torsocks.sh
 
-#& APPEND src/sefunc/00-smtp.sh
+#& APPEND src/sefunc/00-postfix.sh
 
-#& APPEND src/sefunc/00-sshd.sh
+#& APPEND src/sefunc/00-secret.sh
+
+#& APPEND src/sefunc/00-dovecot.sh
+
+#& APPEND src/sefunc/00-kernel.sh
 
 # This is a stub implementation
 efixme "Implement logic to determine which bootloader is used" # FIXME
@@ -297,6 +318,9 @@ BOOTLOADER="grub2"
 
 # Used a stub implementation in case we need to handle different tor directories
 torDir="/etc/tor/"
+
+# FIXME-QA(Krey): There should be a better implementation for this
+DOMAIN="rixotstudio.cz"
 
 ### SECURITY-CHECKLIST
 # - [X] Disable SELinux
@@ -318,10 +342,6 @@ while [ "$#" -gt 0 ]; do case "$1" in
 	"configure-system")
 		efixme "Implement a cron job to automatically update the system"
 		efixme "Set up mailserver to inform administrators about vulnerabilities"
-
-		# DNM: This is hotfix because devuan is incompetent
-		# NOTICE(Krey): Fixed waiting to be merged
-		RELEASE="chimaera"
 
 		# Configure the system to run tor in package manager if supported
 		case "$KERNEL" in
@@ -358,7 +378,8 @@ while [ "$#" -gt 0 ]; do case "$1" in
 							die bug "checking if package 'apt-transport-tor' is installed"
 						fi
 					;;
-					*) die fixme "Linux distribution '$DISTRO' with release '$RELEASE' is not implemented to install tor through $myName"
+					*)
+						die fixme "Linux distribution '$DISTRO' with release '$RELEASE' is not implemented to install tor through script '$myName'"
 				esac
 			;;
 			*) die fixme "Kernel '$KERNEL' is not implemented in $myName to process tor setup"
@@ -384,11 +405,15 @@ while [ "$#" -gt 0 ]; do case "$1" in
 			*) die fixme "Kernel '$KERNEL' is not implemented in $myName to configure the system to use tor"
 		esac
 
+		# Set up SLL certificate
+		# FIXME: Sanitize so that we are not DoSing letsencrypt provider
+		#setup_certbot
+
 		# Set up tor
 		setup_tor
 
-		# Maintainer-specific workflow
-		setup_maintainer
+		# Set up cron
+		setup_cron
 
 		# Configuration torsocks
 		setup_torsocks
@@ -402,49 +427,24 @@ while [ "$#" -gt 0 ]; do case "$1" in
 		# Configure SSH Daemon
 		setup_sshd
 
+		# Setup secrets
+		#setup_secret
+
 		# Configure SMTP provider
-		setup_smtp
+		setup_postfix
 
+		# Configure POP3/IMAP provider
 		# NOTICE(Krey): Currently we are using Dovecot which provides both POP3 and IMAP and so only setup_pop3 is called
-
-		# Configure POP3 provider
-		setup_pop3
-
-		# Configure IMAP provider
-		#setup_imap
-
-		# FIXME: Setup cron
+		setup_dovecot
 
 		die true "Step '$1' finished in $myName"
-	;;
-	"setup-tor")
-		setup_tor
-		die success "Step '$1' finished"
-	;;
-	"setup-kernel")
-		setup_kernel
-		die success "Step '$1' finished"
-	;;
-	"setup-bootloader")
-		setup_bootloader
-		die success "Step '$1' finished"
-	;;
-	"setup-mailserver")
-		die fixme "Install, configure and run mailserver"
-		setup_mailserver
-		die success "Step '$1' finished"
-	;;
-	"setup-proxy")
-		die fixme "Install, configure and run SOCKS5 proxy"
-		setup_proxy
-		die success "Step '$1' finished"
 	;;
 	"--help"|"help")
 		efixme "HELP_MESSAGE"
 		die true
 	;;
 	*)
-		die syntaxerr "FIXME_MESSAGE"
+		die syntaxerr "Invalid argument '$1' has been provided in script '$myName' located at '$0'"
 	;;
 esac; done
 

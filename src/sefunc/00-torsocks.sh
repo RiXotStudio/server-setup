@@ -1,11 +1,8 @@
 #!/bin/false
-# - Used only for sourcing
-# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
-
 # shellcheck shell=sh # Written to be POSIX-compatible
-# shellcheck source=src/bin/server-setup.sh
+# shellcheck source=src/bin/00-server-setup.sh
 
-# shellcheck disable=SC2039 # HOSTNAME is undefined in posix, but defined by our logic
+# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 
 setup_torsocks() { funcname="setup_torsocks"
 	edebug 1 "Started $funcname setup function"

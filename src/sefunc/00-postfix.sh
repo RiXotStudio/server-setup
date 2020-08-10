@@ -1,14 +1,11 @@
 #!/bin/false
-# - Used only for sourcing
+# shellcheck shell=sh # Written to be POSIX-compatible
+# shellcheck source=src/bin/00-server-setup.sh
+
 # Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 
-# shellcheck shell=sh # Written to be POSIX-compatible
-# shellcheck source=src/bin/server-setup.sh
-
-# shellcheck disable=SC2039 # HOSTNAME is undefined in posix, but defined by our logic
-
 ###! Workflow made to configure SMTP handler on RiXotStudio's systems
-###! We are using 'postfix' for reasons stated in :3
+###! We are using 'postfix' for reasons stated in https://github.com/Kreyren/kreyren/issues/24
 ###! Privacy concerns
 ###! - [ ] it is not acceptable for ISP or anyone scanning the network to know that there is an encrypted SMTP/POP3/IMAP traffic going from server A to server B
 ###!  - SOLUTION: OnionMX
@@ -18,6 +15,7 @@
 ###! - [ ] Reachable from darkweb
 ###! - [ ] Disable non-encrypted ports
 ###! - [ ] PGP supported
+###! - [ ] Allow address extension i.e user+folder@example.tls would deliver the email in 'folder' instead of an inbox
 ###! SECURITY-CHECKLIST:
 ###! - [ ] Localhost doesn't have admin privileges (We are using Tor so that could make it exposed)
 ###! Relevant:
@@ -30,11 +28,9 @@
 
 # NOTICE(Krey): OnionMX is currently disable because it needs more research
 
-setup_smtp() { funcname="setup_smtp"
+# FIXME(Krey): Quotting "https://wiki.dovecot.org/LDA/Postfix also read the "prevent backscatter" thing with thought"
+setup_postfix() { funcname="setup_postfix"
 	edebug 1 "Started $funcname setup function"
-
-	# FIXME-QA(Krey): There should be a better implementation for this
-	domain="rixotstudio.cz"
 
 	case "$KERNEL" in
 		"linux")
@@ -52,20 +48,47 @@ setup_smtp() { funcname="setup_smtp"
 						# FIXME(Krey): wtf is biff and why is debian setting it to 'no' by default?
 						biff = no
 
+						# http://www.postfix.org/postconf.5.html#append_at_myorigin
+						append_at_myorigin = yes
+
+						virtual_mailbox_domains = $DOMAIN
+						virtual_transport = dovecot
+						# NOTE(Krey): Quotting:
+						# "you probably also need this"
+						# "if you want to define any aliases"
+						virtual_alias_maps = hash:/etc/postfix/virtual
+
 						# appending .domain in the MUA's job
 						append_dot_mydomain = no
 
+						# Prevent backscatter (https://wiki.dovecot.org/LDA/Postfix)
+						smtpd_reject_unlisted_recipient = yes
+
 						# TLS parameters
-						smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
-						smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+						smtpd_tls_cert_file=/etc/letsencrypt/live/rixotstudio.cz/fullchain.pem
+						smtpd_tls_key_file=/etc/letsencrypt/live/rixotstudio.cz/privkey.pem
 						# NOTICE(Krey): Quotting: "because "may" is opportunistic and a tor mitm will just say "nope" so your encryption is gone"
-						smtpd_tls_security_level=secure
+						smtpd_tls_security_level=encrypt
+						smtpd_tls_auth_only = yes
+
+						# SASL
+						smtpd_sasl_type = dovecot
+						smtpd_sasl_path = private/auth
+						smtpd_sasl_auth_enable = yes
 
 						smtp_tls_CApath=/etc/ssl/certs
 						smtp_tls_session_cache_database = btree:\${data_directory}/smtp_scache
 
 						smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
 						mailbox_size_limit = 0
+
+						# Restrictions
+						# SECURITY-FIXME(Krey): Has to be peer-reviewed
+						smtpd_restriction_classes = mua_sender_restrictions, mua_client_restrictions, mua_helo_restrictions
+						mua_client_restrictions = permit_sasl_authenticated, reject
+						mua_client_restrictions = permit_sasl_authenticated, reject
+						mua_sender_restrictions = permit_sasl_authenticated, reject
+						mua_helo_restrictions = permit_mynetworks, reject_non_fqdn_hostname, reject_invalid_hostname, permit
 
 						# Uncomment the next line to generate "delayed mail" warnings
 						# FIXME(Krey): Do we want this?
@@ -166,14 +189,14 @@ setup_smtp() { funcname="setup_smtp"
 						# from gethostname(). \$myhostname is used as a default value for many
 						# other configuration parameters.
 						#
-						myhostname = $HOSTNAME.$domain
+						myhostname = $HOSTNAME.$DOMAIN
 
 						# The mydomain parameter specifies the local internet domain name.
 						# The default is to use \$myhostname minus the first component.
 						# \$mydomain is used as a default value for many other configuration
 						# parameters.
 						#
-						mydomain = $domain
+						mydomain = $DOMAIN
 
 						# SENDING MAIL
 						#
@@ -192,7 +215,7 @@ setup_smtp() { funcname="setup_smtp"
 						# first line of that file to be used as the name.  The Debian default
 						# is /etc/mailname.
 						#
-						#myorigin = \$mydomain
+						myorigin = \$mydomain
 
 						# RECEIVING MAIL
 
@@ -253,7 +276,8 @@ setup_smtp() { funcname="setup_smtp"
 						# See also below, section "REJECTING MAIL FOR UNKNOWN LOCAL USERS".
 						#
 						# FIXME: TLDR
-						mydestination = \$myhostname, $HOSTNAME.$domain, localhost.$domain, , localhost
+						#mydestination = \$myhostname, $HOSTNAME.$DOMAIN, localhost.$DOMAIN, , localhost
+						mydestination = \$myhostname
 
 						# REJECTING MAIL FOR UNKNOWN LOCAL USERS
 						#
@@ -745,9 +769,10 @@ setup_smtp() { funcname="setup_smtp"
 						inet_protocols = all
 
 						# OnionMX configuration: https://github.com/ehloonion/onionmx/blob/master/postfix.md#setup-a-dns-srv-record-and-a-tcp-map
-						transport_maps = hash:/etc/postfix/tor_transport
+						#transport_maps = hash:/etc/postfix/tor_transport
 					EOF
 
+					# Master.cf
 					cat <<-EOF > /etc/postfix/master.cf
 						#
 						# Postfix master process configuration file.  For details on the format
@@ -761,38 +786,42 @@ setup_smtp() { funcname="setup_smtp"
 						#              (yes)   (yes)   (no)    (never) (100)
 						# ==========================================================================
 						smtp      inet  n       -       y       -       -       smtpd
-						    # NOTICE(Krey): This is set on 'may', because we expect to cherrypick the recievers that support higher security through 'smtp_tls_policy_maps'
-						    -o smtp_tls_security_level=may
-						    -o smtp_tls_mandatory_ciphers=high
-								# NOTICE(Krey): Set on 1 to capture those that support encryption to be added in 'smtp_tls_policy_maps'
-						    -o smtp_tls_loglevel=1
+						  # NOTICE(Krey): This is set on 'may', because we expect to cherrypick the recievers that support higher security through 'smtp_tls_policy_maps'
+						  -o smtp_tls_security_level=may
+						  -o smtp_tls_mandatory_ciphers=high
+						# NOTICE(Krey): Set on 1 to capture those that support encryption to be added in 'smtp_tls_policy_maps'
+						  -o smtp_tls_loglevel=1
+						# Relevant: https://wiki.dovecot.org/LDA/Postfix
+						dovecot unix    -       n       n       -       -      pipe
+  					  flags=DRhu user=vmail:vmail argv=/usr/lib/dovecot/dovecot-lda -f \${sender} -d \${user}@\${nexthop} -m INBOX/\${extension}
 						#smtp      inet  n       -       y       -       1       postscreen
 						#smtpd     pass  -       -       y       -       -       smtpd
 						#dnsblog   unix  -       -       y       -       0       dnsblog
 						#tlsproxy  unix  -       -       y       -       0       tlsproxy
-						#submission inet n       -       y       -       -       smtpd
-						#  -o syslog_name=postfix/submission
-						#  -o smtpd_tls_security_level=encrypt
-						#  -o smtpd_sasl_auth_enable=yes
-						#  -o smtpd_tls_auth_only=yes
-						#  -o smtpd_reject_unlisted_recipient=no
-						#  -o smtpd_client_restrictions=\$mua_client_restrictions
-						#  -o smtpd_helo_restrictions=\$mua_helo_restrictions
-						#  -o smtpd_sender_restrictions=\$mua_sender_restrictions
-						#  -o smtpd_recipient_restrictions=
-						#  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
-						#  -o milter_macro_daemon_name=ORIGINATING
-						#smtps     inet  n       -       y       -       -       smtpd
-						#  -o syslog_name=postfix/smtps
-						#  -o smtpd_tls_wrappermode=yes
-						#  -o smtpd_sasl_auth_enable=yes
-						#  -o smtpd_reject_unlisted_recipient=no
-						#  -o smtpd_client_restrictions=\$mua_client_restrictions
-						#  -o smtpd_helo_restrictions=\$mua_helo_restrictions
-						#  -o smtpd_sender_restrictions=\$mua_sender_restrictions
-						#  -o smtpd_recipient_restrictions=
-						#  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
-						#  -o milter_macro_daemon_name=ORIGINATING
+						submission inet n       -       y       -       -       smtpd
+						  -o syslog_name=postfix/submission
+						  -o smtpd_tls_security_level=encrypt
+						  -o smtpd_sasl_auth_enable=yes
+						  -o smtpd_tls_auth_only=yes
+						  -o smtpd_reject_unlisted_recipient=no
+						  -o smtpd_client_restrictions=\$mua_client_restrictions
+						  -o smtpd_helo_restrictions=\$mua_helo_restrictions
+						  -o smtpd_sender_restrictions=\$mua_sender_restrictions
+						  #-o smtpd_recipient_restrictions=
+						  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+						  #-o milter_macro_daemon_name=ORIGINATING
+						smtps     inet  n       -       y       -       -       smtpd
+						  -o syslog_name=postfix/smtps
+						  -o smtpd_tls_wrappermode=yes
+						  -o smtpd_sasl_auth_enable=yes
+						  -o smtpd_tls_security_level=encrypt
+						  -o smtpd_reject_unlisted_recipient=no
+						  -o smtpd_client_restrictions=\$mua_client_restrictions
+						  -o smtpd_helo_restrictions=\$mua_helo_restrictions
+						  -o smtpd_sender_restrictions=\$mua_sender_restrictions
+						  #-o smtpd_recipient_restrictions=
+						  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+						  #-o milter_macro_daemon_name=ORIGINATING
 						#628       inet  n       -       y       -       -       qmqpd
 						pickup    unix  n       -       y       60      1       pickup
 						cleanup   unix  n       -       y       -       0       cleanup
@@ -809,8 +838,8 @@ setup_smtp() { funcname="setup_smtp"
 						proxywrite unix -       -       n       -       1       proxymap
 						smtp      unix  -       -       y       -       -       smtp
 						relay     unix  -       -       y       -       -       smtp
-						        -o syslog_name=postfix/\$service_name
-						#       -o smtp_helo_timeout=5 -o smtp_connect_timeout=5
+						  -o syslog_name=postfix/\$service_name
+						  #-o smtp_helo_timeout=5 -o smtp_connect_timeout=5
 						showq     unix  n       -       y       -       -       showq
 						error     unix  -       -       y       -       -       error
 						retry     unix  -       -       y       -       -       error
@@ -906,6 +935,10 @@ setup_smtp() { funcname="setup_smtp"
 					# 	HiddenServiceDir /var/lib/tor/hidden_mx
 					# 	HiddenServicePort 25
 					# EOF
+
+					# FIXME-QA: Sanitize
+					efixme "Implement timeout for service restart"
+					service postfix restart || die false "Unable to restart service 'postfix'"
 
 					unset funcname
 					return 0

@@ -50,7 +50,7 @@ vendor: clean
 ###! We are using '#& APPEND something' in the code that is being replaced with a code from a vendor using ed
 
 # FIXME-SUGGESTION: btw that tr command is pointless; also consider using «cmd | while read -r var» instead of «for var in $(cmd)»
-# FIXME-SUGGESTION: @ while IFS= read -r line; do case "$$line" in '#& APPEND '*) cat "$${line##'#& APPEND '}" ;; *) printf '%s\n' "$$line" ;; esac; done < src/bin/server-setup.sh > build/server-setup.sh
+# FIXME-SUGGESTION: @ while IFS= read -r line; do case "$$line" in '#& APPEND '*) cat "$${line##'#& APPEND '}" ;; *) printf '%s\n' "$$line" ;; esac; done < src/bin/00-server-setup.sh > build/server-setup.sh
 # FIXME-QA: This creates additional 3 lines in between comment and '#% APPEND ...'
 # FIXME: Implement these in a way that doesn't mess with EOF
 # && : "Remove comments" \
@@ -61,10 +61,10 @@ vendor: clean
 build: vendor
 	$(info Building..)
 	@ [ -d build ] || mkdir build
-	@ [ -f build/server-setup.sh ] || cp src/bin/server-setup.sh build/server-setup.sh
+	@ [ -f build/server-setup.sh ] || cp src/bin/00-server-setup.sh build/server-setup.sh
 	@ true \
 		&& printf 'INFO: %s\n' "Replacing '#& APPEND path' with requested code" \
-		&& grep "^#& APPEND.*" src/bin/server-setup.sh | while IFS= read -r string; do \
+		&& grep "^#& APPEND.*" src/bin/00-server-setup.sh | while IFS= read -r string; do \
 				true \
 				&& printf '%s\n' "Processing $${string##*/} from appended" \
 				&& cp "$${string##\#& APPEND }" "vendor/$${string##*/}" \
@@ -115,6 +115,12 @@ install: build
 		&& [ -f /root/server-setup.sh ] || cp build/server-setup.sh /root/server-setup.sh
 		&& [ -x /root/server-setup.sh ] || chmod +x /root/server-setup.sh
 	$(info Script has been successfully installed)
+
+#@ Deploy the script to RiXotStudio's Dreamon system
+deploy-dreamon: build
+	@ sshpass \
+		-p "$$(printf "$$KEEPASS_PASSWORD\\n" | keepassxc-cli show --show-protected "$$HOME/Kreyren.kdbx" 'Kreyren/dreamon (root)' 2>/dev/null | grep 'Password:' | sed 's/Password: //')" \
+		ssh root@rixotstudio.cz bash -s -- configure-system < build/server-setup.sh
 
 #@ Uninstall the script
 uninstall:

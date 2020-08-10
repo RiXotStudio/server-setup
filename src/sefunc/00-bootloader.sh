@@ -1,9 +1,8 @@
 #!/bin/false
-# - Used only for sourcing
-# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
-
 # shellcheck shell=sh # Written to be POSIX-compatible
-# shellcheck source=src/bin/server-setup.sh
+# shellcheck source=src/bin/00-server-setup.sh
+
+# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 
 ###! Workflow made to configure bootloader on RiXotStudio's systems
 

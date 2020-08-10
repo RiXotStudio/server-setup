@@ -1,10 +1,8 @@
 #!/bin/false
-# - Used only for sourcing
-# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
-
 # shellcheck shell=sh # Written to be POSIX-compatible
-# shellcheck source=src/bin/server-setup.sh
+# shellcheck source=src/bin/00-server-setup.sh
 
+# Created by Jacob Hrbek under All Rights Reserved in 19/07/2020 (prepared for four freedom respecting license)
 ###! Workflow used to set up tor on target system using RiXotStudio's configuration
 
 # FIXME-SECURITY:
@@ -40,7 +38,7 @@ setup_tor() { funcname="setup_tor"
 					*) die fixme "Installation of package 'tor' on kernel '$KERNEL' using distribution '$DISTRO' with release '$RELEASE' is not implemented"
 				esac
 			;;
-			*) die fixme "Kernel '$KERNEL' is not implemented for function '$funcname' to check for tor in $myName script located at $0"
+			*) die fixme "Kernel '$KERNEL' is not implemented for function '$funcname' to check for tor in '$myName' script located at '$0'"
 		esac
 	else
 		die bug "checking wether tor is executable"
@@ -63,7 +61,7 @@ setup_tor() { funcname="setup_tor"
 				ContactInfo 0x$MAINTAINER_PUBKEY $MAINTAINER_NAME $MAINTAINER_SURNAME <$MAINTAINER_EMAIL>
 				NumCPUs $(nproc || printf '%s\n' "8")
 				SocksPort $tor_SocksPort
-				ORPort $tor_ORPort
+				#ORPort $tor_ORPort
 
 				# Set up SSH Daemon to run through Tor
 				HiddenServiceDir /var/lib/tor/sshd/
@@ -72,6 +70,10 @@ setup_tor() { funcname="setup_tor"
 				# Include configuration for hidden_mx
 				# NOTICE(Krey): OnionMX requires more research and is currently disabled
 				#%include /etc/tor/torrc.d/hidden_mx
+
+				# To provide informations about this relay to public
+				# FIXME: Verify that we can use this as an exit node, then uncomment
+				#DirPortFrontPage /etc/tor//tor-exit-notice.html
 
 				# FIXME: Verify that ISP doesn't log the traffic
 				ExitRelay 0
